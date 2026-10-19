@@ -5,6 +5,6 @@
   "css": "web.css",
   "mustBeVisible": [".tg-view"],
   "overrides": [
-    { "why": "PC players click", "file": "games/triangles/index.js", "find": "Drag from one dot to another", "replace": "Drag from one dot to another (or click one, then the other)" }
+        { "why": "PC players click", "file": "games/triangles/index.js", "find": "Your move: drag from one dot to another.", "replace": "Your move: drag from one dot to another, or click one dot and then the other." }
   ]
 }
