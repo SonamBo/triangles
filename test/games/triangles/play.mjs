@@ -50,7 +50,7 @@ await p.evaluate(() => { __tg.save.level = 5; });
 await p.click('.tg-me'); await p.waitForTimeout(300); await p.click('.tg-card [data-act="done"]'); await p.waitForTimeout(400);
 await p.click('.tg-map-foot [data-act="play"]'); await p.waitForTimeout(500);
 await p.click('.tg-card [data-act]'); await p.waitForTimeout(400);       // "every fifth level is a puzzle"
-await p.click('.tg-card [data-act="go"]'); await p.waitForTimeout(700);
+await p.waitForTimeout(900);                                             // straight in: no "Let's go" tap
 const dbl = await p.evaluate(() => { const B = __tg.M.board; return B.legalMoves().find(([i, j]) => B.gain(i, j) >= 2); });
 ok(!!dbl, 'the puzzle has an answer');
 await drag(dbl[0], dbl[1]); await p.waitForTimeout(1700);

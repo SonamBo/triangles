@@ -340,31 +340,32 @@ export default {
           <button class="tg-btn go" data-act="ok">Let's see it</button>`);
         save.seen.puzzle = 1;
       }
-      if (!quick && spec.kind !== 'tutorial') {
-        const go = await ask(versusCard(spec), 'versus');
-        if (go === 'back') { showMap(); return; }
-      }
       beginMatch(spec);
+      if (!quick && spec.kind !== 'tutorial') introBanner(spec);
     }
 
-    function versusCard(spec) {
+    /**
+     * "Patch vs Rex" over the yard for a moment as the match opens. No tap
+     * needed: it fades by itself, and the player can start drawing under it.
+     */
+    function introBanner(spec) {
       const t = team();
       const r = spec.rival;
-      const goal = spec.kind === 'puzzle' ? buildGoalText(spec) : null;
-      const tw = spec.zone.twist ? TWISTS[spec.zone.twist] : null;
-      return `
-        <div class="tg-vs">
-          <div class="tg-vs-side ${t}"><img src="${img(face(me()))}" alt=""><b>${nameOf(me())}</b><small>You</small></div>
-          <div class="tg-vs-badge">VS</div>
-          <div class="tg-vs-side ${otherTeam(t)}"><img src="${img(face(r))}" alt=""><b>${nameOf(r)}</b><small>${spec.kind === 'boss' ? 'Boss!' : spec.kind === 'puzzle' ? 'Puzzle' : 'Rival'}</small></div>
+      const sub = spec.kind === 'boss' ? 'Boss match!' : spec.kind === 'puzzle' ? buildGoalText(spec).title : `${spec.zone.name} · Level ${spec.level}`;
+      const el = document.createElement('div');
+      el.className = 'tg-intro';
+      el.setAttribute('aria-live', 'polite');
+      el.innerHTML = `
+        <div class="tg-intro-row">
+          <span class="tg-intro-side ${t}"><img src="${img(face(me()))}" alt=""><b>${nameOf(me())}</b></span>
+          <span class="tg-vs-badge">VS</span>
+          <span class="tg-intro-side ${otherTeam(t)}"><img src="${img(face(r))}" alt=""><b>${nameOf(r)}</b></span>
         </div>
-        <div class="tg-kicker">${esc(spec.zone.name)} · Level ${spec.level}</div>
-        ${spec.kind === 'boss' ? `<h2 class="tg-card-title">Boss match</h2><p class="tg-card-line">${nameOf(r)} plays to win. Don't hand over a single triangle.</p>` : ''}
-        ${goal ? `<h2 class="tg-card-title">${esc(goal.title)}</h2><p class="tg-card-line">${esc(goal.line)}</p>` : ''}
-        ${spec.kind === 'match' ? `<p class="tg-card-line">Close more triangles than ${nameOf(r)} to win the yard.</p>` : ''}
-        ${tw && spec.kind !== 'puzzle' ? `<div class="tg-pill center">${spec.zone.twist === 'treats' ? I.treat : ''}${esc(tw.name)}</div>` : ''}
-        <button class="tg-btn go" data-act="go">Let's go!</button>
-        <button class="tg-link" data-act="back">Back to the map</button>`;
+        <div class="tg-intro-sub ${spec.kind}">${esc(sub)}</div>`;
+      root.appendChild(el);
+      if (M) M.introUntil = performance.now() + 1500;
+      setTimeout(() => el.classList.add('out'), 1250);
+      setTimeout(() => el.remove(), 1700);
     }
 
     function buildGoalText(spec) {
@@ -852,6 +853,7 @@ export default {
       setFace(1, 'think');
       coach(`${nameOf(M.chars[1])} is thinking…`, 1);
       const style = M.mode === 'puzzle' ? (M.goal.kind === 'safe' ? 'smart' : spec.style) : spec.style;
+      if (M.introUntil > performance.now()) await wait(M.introUntil - performance.now());
       await wait(style === 'sleepy' ? 900 : 550 + Math.random() * 450);
       if (!M || M.over) return;
       const lead = M.board.scores[1] - M.board.scores[0];
@@ -1231,7 +1233,6 @@ export default {
       onBack() {
         const top = topCard();
         if (top) {
-          if (top.classList.contains('versus') && top._resolve) { closeCard(top); top._resolve('back'); return true; }
           if (top.classList.contains('sheet') && top._resolve) { closeCard(top); top._resolve(); return true; }
           return true;                    // results and intros need an answer
         }
