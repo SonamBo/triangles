@@ -97,7 +97,7 @@
  * The map
  * ---------------------------------------------------------------- */
 
-.tg-map { padding: 0; gap: 0; background: #dfeab9; }
+.tg-map { padding: 0; gap: 0; background-color: #dfeab9; }
 .tg-map-top { display: flex; justify-content: space-between; align-items: center; padding: 4px 14px 8px; }
 .tg-me {
   display: flex; align-items: center; gap: 8px; border: 3px solid var(--tg-ink); background: #fff; border-radius: 999px;
@@ -164,7 +164,7 @@
  * The match
  * ---------------------------------------------------------------- */
 
-.tg-match { background: var(--tg-cream); gap: 8px; }
+.tg-match { background-color: var(--tg-cream); gap: 8px; }
 .tg-score { display: flex; align-items: stretch; gap: 6px; margin-top: 10px; }
 .tg-side {
   flex: 1; min-width: 0; position: relative; display: flex; align-items: center; gap: 7px; background: #fff; border: 3px solid #e6dac4;
@@ -413,6 +413,8 @@
 .tg-map.zone-night .tg-path-line .dash { stroke: #8792b5; }
 .tg-map.zone-night .tg-node.locked { background: #3d4768; border-color: #5c6890; color: #c9d0e6; }
 
+/* A painted background replaces the drawn scenery. */
+.has-bg .tg-scenery { display: none; }
 .tg-scenery { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .tg-scenery .fly { animation: tg-fly 3s ease-in-out infinite alternate; }
 .tg-scenery .fly:nth-of-type(2n) { animation-duration: 4.2s; }

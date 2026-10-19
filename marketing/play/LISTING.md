@@ -90,8 +90,8 @@ About 2,400 characters. The search phrases (dots-and-lines, dots and boxes, stra
 
 | Asset | Size | File |
 |---|---|---|
-| App icon | 512 × 512 PNG | `play-assets/play-icon-512.png` (replace once the Gemini icon is in) |
-| Feature graphic | 1024 × 500 PNG or JPG | `play-assets/feature-graphic.png` (made from the Gemini banner) |
+| App icon | 512 × 512 PNG | `play-assets/play-icon-512.png` |
+| Feature graphic | 1024 × 500 PNG | `play-assets/feature-graphic.png` |
 | Phone screenshots | 2–8, 9:16 | `play-assets/screenshots/01-…png` to `08-…png`, 1080 × 1920, in order |
 | Tablet screenshots | optional | skip for now |
 

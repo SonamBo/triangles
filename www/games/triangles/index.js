@@ -139,7 +139,7 @@ export default {
       const d = me();
       host.mascot({
         hero: 'img/hero-dog.png',
-        face: face(d, 'happy'), peek: face(d, 'happy'), cheer: face(d, 'happy'), slump: face(d, 'sad'),
+        face: face(d, 'happy'), peek: face(d, 'happy'), cheer: pose(d, 'cheer'), slump: face(d, 'sad'),
         crowd: DOGS.map((id) => face(id, 'happy')),
       });
     }
@@ -192,8 +192,8 @@ export default {
 
     function setView(name, html, zoneId = zoneOf(save.level).id) {
       view = name;
-      viewEl.className = `tg-view tg-${name} team-${team()} zone-${zoneId}`;
-      const bg = background(zoneId);
+      const bg = name === 'pick' ? null : background(zoneId);
+      viewEl.className = `tg-view tg-${name} team-${team()} zone-${zoneId}${bg ? ' has-bg' : ''}`;
       viewEl.style.backgroundImage = bg ? `url("${img(bg)}")` : '';
       viewEl.innerHTML = html;
     }

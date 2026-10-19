@@ -10,7 +10,7 @@
 import { rng } from './geom.js';
 
 /** Zones that have a painted background in img/: e.g. ['backyard', 'park']. */
-export const BACKGROUNDS = [];
+export const BACKGROUNDS = ['backyard', 'park', 'rain', 'fence', 'night'];
 
 export const background = (zoneId) => (BACKGROUNDS.includes(zoneId) ? `img/bg-${zoneId}.jpg` : null);
 

@@ -28,12 +28,16 @@ export const teamOf = (id) => (CATS.includes(id) || id === 'kitten' ? 'cat' : 'd
 
 /** Art for a character in a mood: 'happy' | 'think' | 'sad' | 'sleep'. */
 export function face(id, mood = 'happy') {
-  if (id === 'pup') return `img/dog-pup-${mood === 'think' ? 'happy' : mood}.svg`;
+  if (id === 'pup') return `img/dog-pup-${mood === 'think' ? 'happy' : mood}.png`;
   if (id === 'kitten') return mood === 'sleep' ? 'img/cat-biscuit-slump.png' : 'img/cat-biscuit-face.png';
-  if (teamOf(id) === 'dog') return `img/dog-${id}-${mood === 'sleep' ? 'think' : mood}.svg`;
+  if (teamOf(id) === 'dog') return `img/dog-${id}-${mood === 'sleep' ? 'think' : mood}.png`;
   return mood === 'sleep' ? `img/cat-${id}-slump.png` : `img/cat-${id}-face.png`;
 }
-export const pose = (id, kind) => (teamOf(id) === 'cat' ? `img/cat-${id === 'kitten' ? 'biscuit' : id}-${kind}.png` : face(id, kind === 'cheer' ? 'happy' : 'sad'));
+export function pose(id, kind) {
+  if (teamOf(id) === 'cat') return `img/cat-${id === 'kitten' ? 'biscuit' : id}-${kind}.png`;
+  if (kind === 'cheer' && id !== 'pup') return `img/dog-${id}-cheer.png`;
+  return face(id, kind === 'slump' ? 'sad' : 'happy');
+}
 
 /* ---------------- zones ---------------- */
 
