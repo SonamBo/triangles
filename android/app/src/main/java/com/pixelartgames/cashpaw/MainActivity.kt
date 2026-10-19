@@ -1,0 +1,222 @@
+package com.pixelartgames.cashpaw
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import android.view.View
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewClientCompat
+
+/**
+ * A single WebView hosting the game.
+ *
+ * Assets are served through WebViewAssetLoader rather than loaded from
+ * file://. On a file:// origin the WebView blocks ES modules as cross-origin
+ * and gives localStorage an opaque origin, so both the game's module graph and
+ * its save would break. Serving from https://appassets.androidplatform.net
+ * gives a normal, stable origin with no network involved.
+ */
+class MainActivity : ComponentActivity() {
+
+    private lateinit var webView: WebView
+    private lateinit var ads: Ads
+    private lateinit var notify: Notify
+
+    // Android 13+: the system prompt for notifications. Registered up front, as
+    // the API requires; launched only when the page asks, after its own card.
+    private val notifyPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            notify.onPermissionResult(granted)
+        }
+    private var safeTop = 0f
+    private var safeBottom = 0f
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+        super.onCreate(savedInstanceState)
+
+        // Draw behind the system bars, then pad the WebView back out. Doing the
+        // insets natively means the CSS never has to guess at safe areas.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        val loader = WebViewAssetLoader.Builder()
+            .setDomain(ASSET_DOMAIN)
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
+        webView = WebView(this).apply {
+            setBackgroundColor(GROUND)
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true          // the save lives here
+                databaseEnabled = true
+                loadWithOverviewMode = false
+                useWideViewPort = false
+                builtInZoomControls = false
+                displayZoomControls = false
+                setSupportZoom(false)
+                textZoom = 100                    // ignore system font scaling
+                mediaPlaybackRequiresUserGesture = false
+                allowFileAccess = false           // everything goes via the loader
+                allowContentAccess = false
+                cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            }
+
+            webViewClient = object : WebViewClientCompat() {
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+
+                // The page is only there to receive the insets after it loads.
+                override fun onPageFinished(view: WebView, url: String) = pushSafeArea()
+
+                /*
+                 * Anything that is not the game itself — the privacy policy,
+                 * say — goes to the phone's browser. The app has no internet
+                 * permission, so it could not load an outside page even if it
+                 * tried, and keeping it that way is what lets the store listing
+                 * say no data ever leaves the device.
+                 */
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): Boolean {
+                    val url = request.url
+                    if (url.host == ASSET_DOMAIN) return false
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: ActivityNotFoundException) {
+                        // no browser installed; nothing sensible to do
+                    }
+                    return true
+                }
+            }
+        }
+
+        setContentView(webView)
+
+        /*
+         * Hand the insets to the page as CSS variables rather than padding the
+         * WebView. Padding would cut the room background off at the status bar;
+         * this way the art runs edge to edge and only the content is inset.
+         */
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val density = resources.displayMetrics.density
+            safeTop = bars.top / density
+            safeBottom = bars.bottom / density
+            pushSafeArea()
+            insets
+        }
+
+        // Insets may already have been dispatched before the listener existed,
+        // in which case it never fires and the app sits under the status bar.
+        ViewCompat.requestApplyInsets(webView)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = routeBack()
+        })
+
+        // Ads: attached before the page loads so the shell can find it at boot.
+        // Only our own bundled page is ever loaded here — outside links go to
+        // the browser — so exposing this interface reaches no one else.
+        ads = Ads(this, webView)
+        webView.addJavascriptInterface(ads, "CashPawsAds")
+        // Firebase: gameplay events and crash reports. Same reasoning as above.
+        // Only when the build has a google-services.json: without one Firebase
+        // never starts, and the shell simply finds no analytics bridge.
+        if (com.google.firebase.FirebaseApp.getApps(this).isNotEmpty()) {
+            webView.addJavascriptInterface(Analytics(this), "CashPawsAnalytics")
+        }
+        // Reminders (Rewards Box, Bell Quest), scheduled by shell/notify.js.
+        notify = Notify(this, webView) {
+            notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        notify.setLaunchSource(intent?.getStringExtra(ReminderWorker.EXTRA_FROM))
+        webView.addJavascriptInterface(notify, "CashPawsNotify")
+        ads.start()
+
+        if (savedInstanceState != null) webView.restoreState(savedInstanceState)
+        else webView.loadUrl("https://$ASSET_DOMAIN/assets/www/index.html")
+    }
+
+    private fun pushSafeArea() {
+        webView.evaluateJavascript(
+            "document.documentElement.style.setProperty('--safe-top','${safeTop}px');" +
+                "document.documentElement.style.setProperty('--safe-bottom','${safeBottom}px');",
+            null,
+        )
+    }
+
+    /**
+     * Back belongs to the game first. The web layer closes a panel and reports
+     * that it handled it; an open decision card swallows back so the player
+     * cannot skip a choice. Only an idle board lets back leave the app.
+     */
+    private fun routeBack() {
+        webView.evaluateJavascript(
+            "(window.CashPaws && window.CashPaws.onBack && window.CashPaws.onBack()) ? 1 : 0"
+        ) { result ->
+            if (result?.trim() != "1") moveTaskToBack(true)
+        }
+    }
+
+    /** Tapped a reminder while the app was already running (singleTask). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(ReminderWorker.EXTRA_FROM)?.let { id ->
+            webView.evaluateJavascript(
+                "window.__reminderOpened && window.__reminderOpened(${org.json.JSONObject.quote(id)})", null)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Notify.foreground = false
+        webView.onPause()
+        // Flush the save before the process can be killed in the background.
+        webView.evaluateJavascript("window.CashPaws && window.CashPaws.flush()", null)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Notify.foreground = true
+        webView.onResume()
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
+    }
+
+    private companion object {
+        const val ASSET_DOMAIN = "appassets.androidplatform.net"
+        val GROUND = Color.parseColor("#fcf5e6")
+    }
+}

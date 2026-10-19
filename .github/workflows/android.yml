@@ -1,0 +1,100 @@
+name: Build
+
+# Action versions and the runner are pinned deliberately. Bump them when GitHub
+# deprecates them, one at a time, rather than letting "latest" move underneath
+# a build that works.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The rule tests are plain Node with no dependencies, so this runs in seconds and
+  # fails fast before anything touches the Android toolchain.
+  engine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      # Presence check first: a missing Gradle root file fails the Android job
+      # four minutes later with a confusing error, so catch it in two seconds.
+      - name: Pre-flight
+        run: node test/preflight.js
+
+      # The shell's rule tests, then the installed game's own
+      # (test/games/<id>/*.js). Adding a test file is enough to run it here.
+      - name: Rule tests
+        run: node test/run.js
+
+  apk:
+    runs-on: ubuntu-24.04
+    needs: engine
+    env:
+      # '' when the secret is unset, so a fork or fresh clone still builds debug.
+      SIGNED: ${{ secrets.KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Pinned so `gradle` is guaranteed on PATH for the wrapper step below,
+      # rather than relying on whatever the runner image happens to ship.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # There is no gradlew in the repo: a wrapper needs a binary jar, which
+      # could not be generated offline. Gradle writes one here instead.
+      - name: Generate the Gradle wrapper
+        working-directory: android
+        run: gradle wrapper --gradle-version 8.9
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Decode the release keystore
+        if: env.SIGNED == 'true'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      # The Play Store takes an .aab, not an .apk. The APK is still built so you
+      # can sideload the exact same code you are about to publish.
+      - name: Build release APK and AAB
+        if: env.SIGNED == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease bundleRelease --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APK
+        if: env.SIGNED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload Play bundle
+        if: env.SIGNED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

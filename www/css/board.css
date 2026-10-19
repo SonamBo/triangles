@@ -1,0 +1,380 @@
+/* Cash Paws — board screen */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- *
+ * Frame
+ * ---------------------------------------------------------------- */
+
+#app {
+  width: 402px;
+  height: 874px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------------------------------------------------------------- *
+ * Board
+ * ---------------------------------------------------------------- */
+
+.board {
+  /* Zero basis, not auto: with an auto basis the board's own height depends on
+     its content, so sizing the chips to fit changed the space they were being
+     fitted into. That fed back as a one-pixel wobble on every tap. */
+  flex: 1 1 0;
+  min-height: 0;
+  border-top: 2px solid var(--rule);
+  padding: var(--s5) var(--s4) 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s4);
+  position: relative;
+  transition: background var(--t-base) var(--ease);
+}
+
+/* every column darkens for the two turns before a drop */
+.board.telegraph { background: var(--surface-sunk); }
+
+.row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+
+
+.tube.selected {
+  border-color: var(--green);
+  transform: translateY(-4px);
+}
+
+.tube.full { border-color: var(--rule); }
+
+/* ghost cells keep every column reading as a 4-slot grid */
+.cell {
+  height: var(--cell-h);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.cell.ghost::after {
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 3px;
+  background: var(--rule);
+  border-radius: var(--r-pill);
+}
+
+/* ---------------------------------------------------------------- *
+ * Chips — the source artwork, denomination printed on it
+ * ---------------------------------------------------------------- */
+
+.chip {
+  width: var(--chip-d);
+  height: var(--chip-d);
+  object-fit: contain;
+  animation: chip-in var(--t-base) var(--ease) both;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* bills are wider than they are tall */
+.chip.v20 { width: calc(var(--chip-d) + 6px); }
+
+.chip.lifted { transform: translateY(-6px); }
+
+@keyframes chip-in {
+  from { transform: translateY(-10px) scale(.9); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* mascot sits in the space a short board leaves behind */
+
+
+/* ================================================================ *
+ * Board chrome, rebuilt to the reference screen
+ * ================================================================ */
+
+/* The room, exactly as supplied. It carries the paw prints and the ledge. */
+.screen {
+  background: url(../img/bg-room.jpg) center bottom / cover no-repeat, var(--ground);
+}
+
+.hdr {
+  flex: 0 0 auto;
+  padding: calc(var(--s4) + var(--safe-top)) var(--s4) var(--s2);
+  text-align: center;
+}
+
+.hdr-top { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s3); }
+
+.coins {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  background: var(--ledge);
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 5px 5px 5px 7px;
+  box-shadow: 0 2px 0 rgba(120, 80, 68, .10);
+}
+
+.coins-n { font-size: 18px; font-weight: 800; color: var(--cocoa-soft); min-width: 34px; }
+
+.coins-add {
+  width: 24px; height: 24px;
+  border-radius: var(--r-pill);
+  background: #f0ad3e;
+  color: #fff;
+  display: grid; place-items: center;
+  font-size: 17px; font-weight: 800; line-height: 1;
+}
+
+.pause-btn {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 14px;
+  background: #e2d0c1;
+  color: var(--cocoa);
+  margin-right: -2px;
+}
+
+.level-title {
+  margin: 0 0 var(--s3);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: var(--track-tight);
+  color: var(--cocoa);
+}
+
+.bar {
+  position: relative;
+  height: 18px;
+  margin: 0 var(--s6) var(--s3);
+  background: var(--bar-track);
+  border-radius: var(--r-pill);
+}
+
+.bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--bar-fill);
+  border-radius: var(--r-pill);
+  transition: width var(--t-slow) var(--ease);
+}
+
+.bar-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  transition: left var(--t-slow) var(--ease);
+  filter: drop-shadow(0 1px 2px rgba(84, 57, 62, .25));
+}
+
+.bar-figure {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--cocoa-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-sub {
+  margin: 2px 0 var(--s2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #b3a08f;
+}
+
+/* Fixed height: the flow badge drops in here for a second, and if this row
+   grew to fit it the whole board would resize underneath the player. */
+.flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  height: 22px;
+}
+.flow-label { font-size: var(--fs-xs); font-weight: 800; letter-spacing: var(--track-label); color: #b3a08f; }
+.pips { display: flex; gap: 4px; }
+
+.pip {
+  width: 13px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--bar-track);
+  transition: background var(--t-base) var(--ease);
+}
+.pip.on { background: #c4ab97; }
+.turn { font-size: var(--fs-xs); font-weight: 700; color: #c8b7a6; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- *
+ * Tubes — glass cylinder with a coloured cap
+ * ---------------------------------------------------------------- */
+
+.board { border-top: 0; padding: var(--s3) var(--s4) var(--cat-reserve); }
+
+.tube {
+  width: var(--tube-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  transition: transform var(--t-fast) var(--ease);
+}
+
+
+.glass {
+  /* tube.png is 232x703; slices are in its pixels, widths scale with the tube */
+  box-sizing: border-box;
+  width: var(--tube-w);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width:
+    calc(var(--tube-w) * 60 / 232)
+    calc(var(--tube-w) * 17 / 232)
+    calc(var(--tube-w) * 64 / 232)
+    calc(var(--tube-w) * 17 / 232);
+  border-image-source: url(../img/tube.png);
+  border-image-slice: 88 17 92 17 fill;
+  border-image-repeat: stretch;
+}
+
+.tube.selected { transform: translateY(-6px); }
+.tube { filter: drop-shadow(0 4px 5px rgba(120, 80, 68, .16)); }
+.tube.selected { filter: drop-shadow(0 6px 8px rgba(105, 203, 103, .5)); }
+
+.board.telegraph .tube { filter: drop-shadow(0 4px 5px rgba(196, 150, 96, .45)); }
+.board.flowing .tube { filter: drop-shadow(0 0 7px rgba(235, 122, 41, .65)); }
+
+.cell.ghost::after { background: rgba(120, 80, 68, .10); }
+
+/* ---------------------------------------------------------------- *
+ * Ledge, cat, and the action buttons
+ * ---------------------------------------------------------------- */
+
+.ledge {
+  flex: 0 0 auto;
+  position: relative;
+  margin-top: auto;
+  padding: 0 var(--s4) calc(var(--s4) + var(--safe-bottom));
+}
+
+
+/*
+ * The cat's height and the space the board reserves for it are the same
+ * number. Setting them separately is what let it climb over the tubes and the
+ * Undo button on shorter screens.
+ */
+.corner-cat {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% - 5px);
+  height: calc(var(--cat-reserve) + 5px);
+  width: auto;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.corner-heart {
+  position: absolute;
+  left: calc(var(--cat-reserve) * 0.78);
+  bottom: calc(100% + var(--cat-reserve) * 0.52);
+  z-index: 0;
+  width: 26px;
+  z-index: 1;
+  pointer-events: none;
+  animation: heart-float 2.6s ease-in-out infinite;
+}
+
+@keyframes heart-float {
+  0%, 100% { transform: translateY(0); opacity: .95; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+
+.foot {
+  position: relative;
+  z-index: 2;   /* always above the cat */
+  display: flex;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 0;
+}
+
+.act {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  border: 0;
+  border-radius: var(--r-pill);
+  color: #fff;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  box-shadow: 0 3px 0 rgba(120, 80, 68, .18);
+  transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+}
+
+.act-undo { background: var(--olive); }
+.act-sort { background: var(--violet); }
+.act:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120, 80, 68, .18); }
+.act[disabled] {
+  background: #cdc4b9;
+  color: #8a7f76;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.act[disabled] .act-cost { background: rgba(84, 57, 62, .12); color: #8a7f76; }
+.act[disabled] .coin-art { filter: grayscale(1); opacity: .55; }
+
+.act-cost {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 9px 3px 4px;
+  border-radius: var(--r-pill);
+  background: rgba(84, 57, 62, .28);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: #fff;
+}

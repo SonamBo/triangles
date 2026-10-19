@@ -1,0 +1,11 @@
+{
+  "name": "game-shell",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "serve": "node serve.js 8080",
+    "preflight": "node test/preflight.js",
+    "test": "node test/run.js"
+  }
+}
