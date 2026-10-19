@@ -2,9 +2,13 @@
 
 Sent with `host.track()`. The shell's events (app_ready, level_up, level_lost, economy, ads, daily tasks, Bell Quest…) are listed in `docs/ANALYTICS.md` and aren't repeated here.
 
+Every event below also carries `team` (cat | dog) and `character` (patch, rex…), so any report can be split by team.
+
 | Event | When | Params |
 |---|---|---|
-| `team_picked` | First launch, after choosing a team | `team`: cat \| dog |
+| `team_picked` | First launch, after choosing a team | (team, character) |
+| `team_changed` | The player switched team from the map | `from`: the old team |
+| `character_changed` | The player picked another character on the same team | `from`: the old character |
 | `match_start` | A match or puzzle begins (not on resume) | `level`, `kind`: tutorial \| match \| boss \| puzzle \| duo |
 | `match_won` | A level is won, after the reward | `level`, `kind`, `hints` |
 | `match_lost` | A loss is final (the player didn't undo) | `level`, `kind`, `losses` (in a row on this level; the rival eases off 0.08 skill per loss, up to 3) |

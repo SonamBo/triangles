@@ -109,6 +109,24 @@ export default {
     function releaseTimers() { for (const j of waiters) if (!j.timer) j.arm(); }
 
     const team = () => save.team || 'cat';
+    /** The game's own analytics events, each tagged with the player's team and character. */
+    const track = (name, params = {}) => host.track(name, { ...params, team: team(), character: me() });
+
+    /**
+     * Lend the shell art for the player's team: the lobby picture always, and
+     * on Team Dog the dogs' faces and poses too (the shell's own are cats).
+     * An older shell without host.mascot simply keeps its cats.
+     */
+    function applyMascot() {
+      if (!host.mascot) return;
+      if (!save.team || team() === 'cat') { host.mascot({ hero: 'img/hero-cat.png' }); return; }
+      const d = me();
+      host.mascot({
+        hero: 'img/hero-dog.png',
+        face: face(d, 'happy'), peek: face(d, 'happy'), cheer: face(d, 'happy'), slump: face(d, 'sad'),
+        crowd: DOGS.map((id) => face(id, 'happy')),
+      });
+    }
     // Losses in a row on the level being played; the rival eases off a little for each.
     const lossesAt = (level) => (save.streak && save.streak.level === level ? save.streak.n : 0);
     const me = () => save.chars[team()];
@@ -206,7 +224,8 @@ export default {
       viewEl.querySelectorAll('[data-team]').forEach((b) => b.addEventListener('click', () => {
         save.team = b.dataset.team;
         host.sound(TEAM[save.team].voice);
-        host.track('team_picked', { team: save.team });
+        track('team_picked');
+        applyMascot();
         host.save();
         startLevel(save.level);
       }));
@@ -295,6 +314,7 @@ export default {
 
     async function chooseCharacter() {
       let t = team();
+      const before = { team: t, char: save.chars[t] };
       const draw = () => {
         const ids = t === 'cat' ? CATS : DOGS;
         return `
@@ -319,7 +339,12 @@ export default {
         });
         el._resolve = resolve;
       });
+      if (t !== before.team || save.chars[t] !== before.char) {
+        if (t !== before.team) track('team_changed', { from: before.team });
+        else track('character_changed', { from: before.char });
+      }
       save.team = t;
+      applyMascot();
       host.save();
       if (view === 'map') showMap();
     }
@@ -423,7 +448,7 @@ export default {
         M.tut = resume.tut || 0;
       }
       renderMatch();
-      if (!resume) host.track('match_start', { level: spec.level, kind: duo ? 'duo' : spec.kind });
+      if (!resume) track('match_start', { level: spec.level, kind: duo ? 'duo' : spec.kind });
       persist();
       if (M.tut === 1) tutorialStep();
       next();
@@ -929,7 +954,7 @@ export default {
         host.wallet.spend(hintCost(), 'hint');
       } else M.freeHint = false;
       M.hints++;
-      host.track('hint_used', { level: M.spec.level });
+      track('hint_used', { level: M.spec.level });
       const m = M.mode === 'puzzle' && M.goal.kind === 'double'
         ? M.board.legalMoves().find(([i, j]) => M.board.gain(i, j) >= 2)
         : hint(M.board, 0);
@@ -1061,7 +1086,7 @@ export default {
       if (act === 'double' && await host.rewarded.show('double-coins')) paid = coins * 2;
       host.wallet.earn(paid, 'win');
       host.levelWon({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
-      host.track('match_won', { level: spec.level, kind: spec.kind, hints: M.hints });
+      track('match_won', { level: spec.level, kind: spec.kind, hints: M.hints });
       save.level = Math.max(save.level, spec.level + 1);
       save.streak = null;
       save.best = Math.max(save.best, spec.level);
@@ -1095,11 +1120,11 @@ export default {
           <button class="tg-btn ghost" data-act="map">${I.map}<span>Map</span></button>
         </div>`, 'lose');
       if (act === 'undo' && await host.rewarded.show('undo-moves')) {
-        host.track('undo_moves', { level: spec.level });
+        track('undo_moves', { level: spec.level });
         return undoThree();
       }
       host.levelLost({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
-      host.track('match_lost', { level: spec.level, kind: spec.kind, losses: lossesAt(spec.level) + 1 });
+      track('match_lost', { level: spec.level, kind: spec.kind, losses: lossesAt(spec.level) + 1 });
       save.streak = { level: spec.level, n: lossesAt(spec.level) + 1 };
       M = null;
       host.save();
@@ -1161,7 +1186,7 @@ export default {
         <p class="tg-card-line">${M.goal.kind === 'double' ? 'That line closed fewer than two triangles. Look for a line that is the last side of two at once.' : M.goal.kind === 'safe' ? `${nameOf(M.chars[1])} found a triangle to close. Look for lines that don't make a second side.` : 'So close. Try again!'}</p>
         <button class="tg-btn go" data-act="again">${I.retry}<span>Try again (free)</span></button>
         <button class="tg-link" data-act="map">Back to the map</button>`, 'lose');
-      host.track('puzzle_failed', { level: spec.level, kind: M.goal.kind });
+      track('puzzle_failed', { level: spec.level, kind: M.goal.kind });
       M = null;
       host.save();
       if (act === 'map') return showMap();
@@ -1218,6 +1243,7 @@ export default {
         if (saved) {
           Object.assign(save, saved, { chars: { ...save.chars, ...(saved.chars || {}) }, seen: { ...(saved.seen || {}) } });
         }
+        applyMascot();
         report();
       },
       serialize: () => ({ ...save }),
