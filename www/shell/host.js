@@ -3,7 +3,7 @@
  * shell. See docs/GAME-MODULE.md for the contract.
  */
 
-import { cat, coinIcon } from './art.js';
+import { cat, coinIcon, setMascot } from './art.js';
 import { asset } from './assets.js';
 import { celebrate, setback, confirm, show, dismiss, wait } from './overlays.js';
 
@@ -11,7 +11,7 @@ export function haptic(pattern) {
   try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
 }
 
-export function createHost({ game, shell, wallet, header, ads, onProgress, onStat, save, exit, dev, events = {}, coach, sound }) {
+export function createHost({ game, shell, wallet, header, ads, onProgress, onStat, save, exit, dev, events = {}, coach, sound, onMascot }) {
   const stats = (shell.gameStats[game.id] ||= {});
 
   return {
@@ -71,6 +71,25 @@ export function createHost({ game, shell, wallet, header, ads, onProgress, onSta
     art: {
       cat: (pose, width, cls = '') => cat(pose, width, cls),
       coin: (width) => coinIcon(width),
+    },
+
+    /**
+     * Lend the shell the game's own mascot, shown instead of the worn cat in
+     * the lobby picture, the header, celebrations, setbacks and Bell Quest:
+     * { hero, face, cheer, slump, peek, crowd: [faces] }, paths in the game's
+     * folder, any of them optional. null gives the cats back. The Cats tab
+     * always shows the cats.
+     */
+    mascot(m) {
+      const url = (p) => asset(game.path + p);
+      if (!m) setMascot(null);
+      else {
+        const out = {};
+        for (const k of ['hero', 'face', 'cheer', 'slump', 'peek']) if (m[k]) out[k] = url(m[k]);
+        if (Array.isArray(m.crowd) && m.crowd.length) out.crowd = m.crowd.map(url);
+        setMascot(out);
+      }
+      onMascot?.();
     },
     asset: (path) => asset(game.path + path),
 

@@ -127,6 +127,11 @@ host.rewarded.show(where)         // resolves true if the player earned the rewa
 
 host.art.cat(pose, width, cls)    // the worn cat: 'peek' | 'cheer' | 'slump' | 'face'
 host.art.coin(width)
+host.mascot({ hero, face, cheer, slump, peek, crowd })
+                                  // lend the shell the game's own mascot (paths in the game's
+                                  // folder, all optional): the lobby picture, the header face,
+                                  // celebration and setback poses, Bell Quest's crowd. null gives
+                                  // the worn cat back. The Cats tab always shows the cats
 host.asset(path)                  // this game's file, e.g. 'img/chip-5.png' — always
                                   // go through this; the single-file build depends on it
 

@@ -665,6 +665,7 @@ img.art { user-select: none; -webkit-user-drag: none; }
 
 .tagline { width: min(190px, 50vw); height: auto; margin-bottom: var(--s2); }
 
+.lobby-hero-slot { display: contents; }
 .lobby-hero {
   width: min(252px, 66vw);
   height: auto;

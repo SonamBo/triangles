@@ -30,7 +30,7 @@ export class LobbyView {
       <main class="lobby-main">
         ${logo(222)}
         ${tagline(190)}
-        ${catHero(252)}
+        <span class="lobby-hero-slot" data-hero>${catHero(252)}</span>
         <button class="play" data-play>
           <span data-play-label>Play</span>
           <small data-play-sub></small>
@@ -49,6 +49,7 @@ export class LobbyView {
       coins: $('[data-coins]'), playLabel: $('[data-play-label]'),
       playSub: $('[data-play-sub]'), nav: $('[data-nav]'),
     };
+    this.el.hero = $('[data-hero]');
     $('[data-play]').addEventListener('click', () => this.fire('play'));
     $('[data-settings]').addEventListener('click', () => this.fire('settings'));
     $('[data-box]').addEventListener('click', () => this.fire('box'));
@@ -74,6 +75,9 @@ export class LobbyView {
     this.root.querySelector('[data-box]').classList.toggle('ready', on);
     this.root.querySelector('[data-box-dot]').hidden = !on;
   }
+
+  /** The lobby picture: the game's mascot hero when it lent one, else the cat. */
+  redrawHero() { this.el.hero.innerHTML = catHero(252); }
 
   /**
    * The Bell Quest icon. Hidden until the quest unlocks. `pill` is the line

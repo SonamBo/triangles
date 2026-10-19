@@ -3,6 +3,11 @@
  *
  * A game never reaches in here. It asks for the worn cat through host.art,
  * which is why a replacement game gets the player's chosen cat for free.
+ *
+ * A game can also lend the shell its own mascot (host.mascot): a lobby
+ * picture, a face, cheer and slump poses, and a crowd of faces for Bell
+ * Quest. Where it gives one, the shell shows it instead of the worn cat; the
+ * Cats tab always shows the cats.
  */
 
 import { catById } from './cats.js';
@@ -16,14 +21,28 @@ let worn = 'patch';
 export const setWornCat = (id) => { worn = id || 'patch'; };
 export const wornCat = () => worn;
 
-/** A cat in a pose: peek, cheer, slump or face. Falls back to Patch without art. */
-export function cat(pose, w, cls = '', want = worn) {
-  const id = catById(want).hasArt ? want : 'patch';
+// The game's mascot, if it lent one: { hero, face, cheer, slump, peek, crowd: [] }, as resolved URLs.
+let mascot = null;
+export const setMascot = (m) => { mascot = m && Object.keys(m).length ? m : null; };
+const lent = (src, w, cls) => `<img class="art ${cls}" src="${src}" width="${w}" alt="" draggable="false">`;
+
+/**
+ * A cat in a pose: peek, cheer, slump or face. Falls back to Patch without
+ * art. With no particular cat asked for, the game's mascot stands in when it
+ * has that pose.
+ */
+export function cat(pose, w, cls = '', want) {
+  if (want === undefined && mascot?.[pose]) return lent(mascot[pose], w, cls);
+  const id = catById(want ?? worn).hasArt ? (want ?? worn) : 'patch';
   return img(`img/cat-${id}-${pose}.png`, w, cls);
 }
 
+/** One of the crowd (Bell Quest's rivals): the mascot's crowd if it has one, else the cat given. */
+export const crowdFace = (i, w, cls, fallbackId) =>
+  (mascot?.crowd?.length ? lent(mascot.crowd[i % mascot.crowd.length], w, cls) : cat('face', w, cls, fallbackId));
+
 export const catFace = (w = 36, id) => cat('face', w, 'cat-avatar', id);
-export const catHero = (w = 252) => img('img/cat-hero.png', w, 'lobby-hero');
+export const catHero = (w = 252) => (mascot?.hero ? lent(mascot.hero, w, 'lobby-hero') : img('img/cat-hero.png', w, 'lobby-hero'));
 export const coinIcon = (s = 22) => img('img/coin.png', s, 'coin-art');
 export const logo = (w = 222) => img('img/logo.png', w, 'logo', APP.name);
 export const tagline = (w = 190) => img('img/tagline.png', w, 'tagline', '');

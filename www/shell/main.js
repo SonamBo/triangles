@@ -530,6 +530,7 @@ async function boot() {
   }
   const host = createHost({
     game, shell, wallet, header, ads, sound,
+    onMascot: () => { header.redrawCat(); lobby.redrawHero(); },
     onProgress: (p) => {
       if (Number.isFinite(p?.level)) currentLevel = p.level;
       lobby.update({ coins: wallet.coins, summary: shell.summaries[game.id] });

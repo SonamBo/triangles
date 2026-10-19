@@ -7,7 +7,7 @@
  * roster's own faces.
  */
 
-import { cat, catFace, coinIcon, icons } from './art.js';
+import { cat, catFace, crowdFace, coinIcon, icons } from './art.js';
 import { asset } from './assets.js';
 import { show, dismiss, wait } from './overlays.js';
 import { catsLeft, formatLeft, RIVALS } from './quest.js';
@@ -33,7 +33,7 @@ const stone = (s) => `<img class="q-stone ${s.cls}" style="left:${s.x}%;top:${s.
   src="${asset(`img/quest-stone-${STONE[s.cls]}.png`)}" alt="" draggable="false">`;
 
 const face = (i, w = 30) =>
-  `<span class="q-face" style="--i:${i}">${cat('face', w, 'cat-avatar', RIVAL_FACES[i % RIVAL_FACES.length])}</span>`;
+  `<span class="q-face" style="--i:${i}">${crowdFace(i, w, 'cat-avatar', RIVAL_FACES[i % RIVAL_FACES.length])}</span>`;
 const faces = (n, w = 30) => Array.from({ length: n }, (_, i) => face(i, w)).join('');
 
 function card(html, after = null, pickSel = '[data-pick]') {
