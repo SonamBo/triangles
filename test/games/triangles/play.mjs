@@ -43,6 +43,8 @@ await p.waitForTimeout(1500);
 ok((await p.locator('.tg-card .tg-card-title').textContent()) === 'Your first win!', 'the first match is won');
 ok(await p.evaluate(() => __tg.M.board.scores[1] === 0), 'the pup never scored');
 await p.click('.tg-card [data-act="next"]'); await p.waitForTimeout(1500);
+// the first win is also an achievement: tap through it
+for (let k = 0; k < 5 && await p.locator('.tg-card-wrap.in [data-act="ok"]').count(); k++) { await p.click('.tg-card-wrap.in [data-act="ok"]'); await p.waitForTimeout(400); }
 ok(await p.evaluate(() => __tg.view === 'map' && __tg.save.level === 2), 'on to the map at level 2');
 
 // The first puzzle: one line that closes two triangles.

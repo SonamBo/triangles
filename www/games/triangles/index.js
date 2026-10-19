@@ -21,6 +21,10 @@ import {
 } from './levels.js';
 import { SOUNDS } from './sounds.js';
 import { scenery, background } from './art.js';
+import {
+  CHARACTERS, POWERS, isUnlocked, powerOf, joiningAt, unlockLine, starsFor, starLines, totalStars, zoneStars,
+  today, dailySpec, dailyReward, nextStreak, ACHIEVEMENTS, THEMES,
+} from './meta.js';
 
 const TEAM = {
   cat: { name: 'Team Cat', fill: '#f2a043', deep: '#b8661a', soft: '#fff3df', tint: '#f7c37b', voice: 'meow', emote: 'Meow' },
@@ -47,6 +51,10 @@ const I = {
   lock: '<svg width="14" height="16" viewBox="0 0 12 14" fill="currentColor" aria-hidden="true"><rect x="1" y="6" width="10" height="8" rx="2"/><path d="M3 6V4a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   logo: '<svg width="40" height="36" viewBox="0 0 44 40" aria-hidden="true"><polygon points="4,36 40,36 22,4" fill="#f2a043"/><polygon points="22,4 40,36 31,20" fill="#4a80c4"/><polygon points="4,36 40,36 22,4" fill="none" stroke="#3b2a1e" stroke-width="4" stroke-linejoin="round"/><circle cx="4" cy="36" r="4" fill="#3b2a1e"/><circle cx="40" cy="36" r="4" fill="#3b2a1e"/><circle cx="22" cy="4" r="4" fill="#3b2a1e"/></svg>',
   puzzle: '<svg width="22" height="20" viewBox="0 0 22 20" aria-hidden="true"><polygon points="2,18 20,18 11,2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><text x="11" y="16" text-anchor="middle" font-weight="900" font-size="10" fill="currentColor">?</text></svg>',
+  undo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  trophy: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3"/><path d="M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
+  daily: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17"/><path d="M8 3v4M16 3v4"/><path d="m12 12.3 1.1 2.2 2.4.3-1.8 1.7.5 2.4-2.2-1.2-2.2 1.2.5-2.4-1.8-1.7 2.4-.3z" fill="currentColor" stroke="none"/></svg>',
+  star: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17l-5.6 3 1.1-6.2-4.6-4.4 6.3-.9z" fill="currentColor" stroke="#3b2a1e" stroke-width="1.6" stroke-linejoin="round"/></svg>',
   treat: '<svg width="16" height="16" viewBox="-10 -10 20 20" aria-hidden="true"><circle r="8" fill="#f4c35a" stroke="#3b2a1e" stroke-width="2"/><circle cx="-3" cy="-2" r="1.5" fill="#8a5a1a"/><circle cx="3" cy="-3" r="1.3" fill="#8a5a1a"/><circle cx="1" cy="3.5" r="1.5" fill="#8a5a1a"/></svg>',
 };
 
@@ -58,6 +66,10 @@ export default {
   sounds: SOUNDS,
   analytics: { batch: ['win'] },
   quest: { unlockLevel: 8, steps: 7 },
+
+  // The Shop: yard themes, bought with coins and worn with setCosmetic().
+  cosmetics: THEMES,
+  defaultCosmetic: 'lawn',
 
   perks: {
     patch: { text: 'Hints cost 15 coins instead of 25.', config: { hintCost: 15 } },
@@ -88,7 +100,11 @@ export default {
 
     /* ---------------- state ---------------- */
 
-    const save = { team: null, chars: { cat: 'patch', dog: 'rex' }, level: 1, best: 0, seen: {}, match: null, wins: 0, played: 0 };
+    const save = {
+      team: null, chars: { cat: 'patch', dog: 'rex' }, level: 1, best: 0, seen: {}, match: null, wins: 0, played: 0,
+      stars: {}, ach: {}, daily: {}, teamWins: {}, bossWins: [], cleanBoss: false,
+    };
+    let theme = 'lawn';
     let perk = {};
     let view = '';
     let visible = false;
@@ -186,8 +202,9 @@ export default {
       if (view === 'match' && M) {
         if (M.mode === 'duo') { host.progress({ title: '2 players', fraction: null, figure: '', summary: `Level ${save.level}` }); return; }
         const s = M.spec;
-        const label = s.kind === 'boss' ? 'Boss match' : s.kind === 'puzzle' ? M.goal.title : s.kind === 'tutorial' ? 'Your first match' : s.zone.name;
-        host.progress({ title: `Level ${s.level}`, fraction: null, figure: label, level: s.level, summary: `Level ${s.level} · ${s.zone.name}` });
+        if (M.daily) { host.progress({ title: 'Daily Yard', fraction: null, figure: s.dateKey, level: save.level, summary: `Level ${save.level} · ${zoneOf(save.level).name}` }); return; }
+        const label = (M.replay ? 'Replay · ' : '') + (s.kind === 'boss' ? 'Boss match' : s.kind === 'puzzle' ? M.goal.title : s.kind === 'tutorial' ? 'Your first match' : s.zone.name);
+        host.progress({ title: `Level ${s.level}`, fraction: null, figure: label, level: M.replay ? save.level : s.level, summary: `Level ${save.level} · ${zoneOf(save.level).name}` });
         return;
       }
       const z = zoneOf(save.level);
@@ -260,8 +277,10 @@ export default {
         if (kind === 'puzzle') inner = `${I.puzzle}<span class="n">${lv}</span>`;
         if (kind === 'boss') inner = `<img src="${img(face(spec.rival, state === 'done' ? 'sad' : 'happy'))}" alt=""><span class="n">${lv}</span>`;
         if (state === 'done' && kind === 'plain') inner = svgIcon(t, 24, '#fff');
-        const label = `Level ${lv}${kind === 'boss' ? ', boss' : kind === 'puzzle' ? ', puzzle' : ''}${state === 'done' ? ', done' : state === 'locked' ? ', locked' : ''}`;
-        return `<button class="tg-node ${state} ${kind}" style="left:${p.x}%;top:${p.y}px" data-level="${lv}" aria-label="${label}" ${state === 'now' ? '' : 'tabindex="-1"'}>${inner}</button>`
+        const got = save.stars[lv] || 0;
+        const label = `Level ${lv}${kind === 'boss' ? ', boss' : kind === 'puzzle' ? ', puzzle' : ''}${state === 'done' ? `, ${got} of 3 stars, tap to replay` : state === 'locked' ? ', locked' : ''}`;
+        const stars = state === 'done' ? `<span class="tg-node-stars" aria-hidden="true">${[0, 1, 2].map((k) => `<i class="${k < got ? 'on' : ''}">${I.star}</i>`).join('')}</span>` : '';
+        return `<button class="tg-node ${state} ${kind}" style="left:${p.x}%;top:${p.y}px" data-level="${lv}" aria-label="${label}" ${state === 'locked' ? 'tabindex="-1"' : ''}>${inner}${stars}</button>`
           + (state === 'now' ? `<span class="tg-here" style="left:${p.x}%;top:${p.y - 66}px"><img src="${img(face(me()))}" alt="You are here"></span>` : '');
       }).join('');
 
@@ -270,7 +289,11 @@ export default {
           <button class="tg-me" data-act="chars" aria-label="Choose your character">
             <img src="${img(face(me()))}" alt=""><span>${nameOf(me())}</span><i style="background:${TEAM[t].fill}">${svgIcon(t, 12, '#fff')}</i>
           </button>
-          <button class="tg-small" data-act="duo">${I.duo}<span>2 players</span></button>
+          <span class="tg-top-btns">
+            <button class="tg-icon-btn" data-act="daily" aria-label="Daily Yard">${I.daily}${save.daily.last !== today() ? '<i class="tg-dot"></i>' : ''}</button>
+            <button class="tg-icon-btn" data-act="trophies" aria-label="Achievements">${I.trophy}</button>
+            <button class="tg-icon-btn" data-act="duo" aria-label="2 players, one phone">${I.duo}</button>
+          </span>
         </div>
         <div class="tg-zone ${z.id}">
           <div class="tg-zone-text">
@@ -279,9 +302,13 @@ export default {
             ${tw ? `<div class="tg-pill">${z.twist === 'treats' ? I.treat : ''}${esc(tw.name)}</div>` : '<div class="tg-pill">Learn the yard</div>'}
           </div>
           <div class="tg-boss"><span><img src="${img(face(rivalId))}" alt="${nameOf(rivalId)}"></span><small>Boss · Lv ${z.last}</small></div>
+          <div class="tg-zone-stars" aria-label="${zoneStars(save.stars, z)} of 30 stars in this zone">${I.star}<b>${zoneStars(save.stars, z)}</b>/30</div>
         </div>
         <div class="tg-trail">
-          <div class="tg-next-zone">${I.lock} ${esc(nextZ.name)}${nextZ.twist ? ` · ${esc(TWISTS[nextZ.twist].name.toLowerCase())}` : ''} · level ${nextZ.first}</div>
+          <div class="tg-next-zone">
+            ${I.lock}<img src="${img(face(nextZ.rival[t]))}" alt="">
+            <span><b>Next: ${esc(nextZ.name)}</b>${nextZ.twist && nextZ.round === 0 ? ` · ${esc(TWISTS[nextZ.twist].name)}` : ''} · ${esc(nameOf(nextZ.rival[t]))} awaits at level ${nextZ.first}</span>
+          </div>
           <div class="tg-path ${z.id}" style="height:${height}px">
             ${scenery(z.id, height, z.index + 1)}
             <svg class="tg-path-line" viewBox="0 0 100 ${height}" preserveAspectRatio="none" aria-hidden="true">
@@ -300,7 +327,10 @@ export default {
       viewEl.querySelector('.tg-node.now')?.addEventListener('click', () => startLevel(save.level));
       viewEl.querySelector('[data-act="chars"]').addEventListener('click', chooseCharacter);
       viewEl.querySelector('[data-act="duo"]').addEventListener('click', startDuo);
-      viewEl.querySelectorAll('.tg-node.locked, .tg-node.done').forEach((b) => b.addEventListener('click', () => {
+      viewEl.querySelector('[data-act="daily"]').addEventListener('click', startDaily);
+      viewEl.querySelector('[data-act="trophies"]').addEventListener('click', showAchievements);
+      viewEl.querySelectorAll('.tg-node.done').forEach((b) => b.addEventListener('click', () => replayLevel(Number(b.dataset.level))));
+      viewEl.querySelectorAll('.tg-node.locked').forEach((b) => b.addEventListener('click', () => {
         host.sound('error');
         b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
       }));
@@ -323,8 +353,12 @@ export default {
             <button data-t="cat" aria-pressed="${t === 'cat'}" class="${t === 'cat' ? 'on cat' : ''}">Team Cat</button>
             <button data-t="dog" aria-pressed="${t === 'dog'}" class="${t === 'dog' ? 'on dog' : ''}">Team Dog</button>
           </div>
-          <div class="tg-chars">${ids.map((id) => `<button class="tg-char ${save.chars[t] === id ? 'on' : ''} ${t}" data-c="${id}" aria-pressed="${save.chars[t] === id}"><img src="${img(face(id))}" alt=""><span>${nameOf(id)}</span></button>`).join('')}</div>
-          <p class="tg-card-line">Your rivals are always from the other team.</p>
+          <div class="tg-chars">${ids.map((id) => {
+            const open = isUnlocked(id, save.level);
+            return `<button class="tg-char ${save.chars[t] === id ? 'on' : ''} ${t} ${open ? '' : 'locked'}" data-c="${id}" aria-pressed="${save.chars[t] === id}" aria-label="${nameOf(id)}${open ? '' : ', locked'}"><img src="${img(face(id))}" alt=""><span>${nameOf(id)}</span>${open ? '' : `<i class="tg-lock">${I.lock}</i>`}</button>`;
+          }).join('')}</div>
+          <div class="tg-power"><b>${nameOf(save.chars[t])}:</b> ${esc(POWERS[powerOf(save.chars[t])])}</div>
+          <p class="tg-card-line small">New friends join each time you beat a zone boss. Your rivals are always from the other team.</p>
           <button class="tg-btn go" data-act="done">Done</button>`;
       };
       const el = card(draw(), 'sheet');
@@ -334,7 +368,16 @@ export default {
           const tb = e.target.closest('[data-t]');
           const cb = e.target.closest('[data-c]');
           if (tb) { t = tb.dataset.t; inner.innerHTML = draw(); return; }
-          if (cb) { save.chars[t] = cb.dataset.c; save.team = t; host.sound(TEAM[t].voice === 'meow' ? 'meow-small' : 'woof-small'); inner.innerHTML = draw(); return; }
+          if (cb) {
+            const id = cb.dataset.c;
+            if (!isUnlocked(id, save.level)) {
+              host.sound('error');
+              const pw = inner.querySelector('.tg-power');
+              if (pw) pw.innerHTML = `<b>${nameOf(id)}:</b> ${esc(unlockLine(id))}. Then: ${esc(POWERS[powerOf(id)])}`;
+              return;
+            }
+            save.chars[t] = id; save.team = t; host.sound(TEAM[t].voice === 'meow' ? 'meow-small' : 'woof-small'); inner.innerHTML = draw(); return;
+          }
           if (e.target.closest('[data-act="done"]')) { closeCard(el); resolve(); }
         });
         el._resolve = resolve;
@@ -372,14 +415,47 @@ export default {
       if (!quick && spec.kind !== 'tutorial') introBanner(spec);
     }
 
+    /** Replay a level already beaten, for its stars. Progress and quests don't move. */
+    function replayLevel(level) {
+      const spec = levelSpec(level, team());
+      beginMatch(spec, { replay: true });
+      introBanner(spec, `Replay · best ${save.stars[level] || 0} of 3 stars`);
+    }
+
+    /** Today's Daily Yard: the same board for everyone, once a day, with a streak. */
+    async function startDaily() {
+      const key = today();
+      const streak = nextStreak(save.daily, key);
+      if (save.daily.last === key) {
+        await ask(`
+          <div class="tg-kicker green">Daily Yard</div>
+          <h2 class="tg-card-title">Done for today!</h2>
+          <p class="tg-card-line">You won today's yard. A new one opens tomorrow.</p>
+          <div class="tg-streak">${I.daily}<b>${save.daily.streak || 1}</b> day streak</div>
+          <button class="tg-btn go" data-act="ok">OK</button>`);
+        return;
+      }
+      const go = await ask(`
+        <div class="tg-kicker green">Daily Yard · ${esc(key)}</div>
+        <h2 class="tg-card-title">Today's yard</h2>
+        <p class="tg-card-line">One special board a day, the same for everyone. Win it to keep your streak going.</p>
+        <div class="tg-streak">${I.daily}${streak > 1 ? `<b>${streak - 1}</b>&nbsp;day streak · win today: <b>+${dailyReward(streak)}</b>` : `Win today to start a streak: <b>+${dailyReward(streak)}</b>`}&nbsp;coins</div>
+        <button class="tg-btn go" data-act="go">Play today's yard</button>
+        <button class="tg-link" data-act="back">Not now</button>`);
+      if (go !== 'go') return;
+      const spec = dailySpec(key, save.level, team());
+      beginMatch(spec, { daily: true });
+      introBanner(spec, 'Daily Yard');
+    }
+
     /**
      * "Patch vs Rex" over the yard for a moment as the match opens. No tap
      * needed: it fades by itself, and the player can start drawing under it.
      */
-    function introBanner(spec) {
+    function introBanner(spec, label) {
       const t = team();
       const r = spec.rival;
-      const sub = spec.kind === 'boss' ? 'Boss match!' : spec.kind === 'puzzle' ? buildGoalText(spec).title : `${spec.zone.name} · Level ${spec.level}`;
+      const sub = label || (spec.kind === 'boss' ? 'Boss match!' : spec.kind === 'puzzle' ? buildGoalText(spec).title : `${spec.zone.name} · Level ${spec.level}`);
       const el = document.createElement('div');
       el.className = 'tg-intro';
       el.setAttribute('aria-live', 'polite');
@@ -420,7 +496,7 @@ export default {
 
     /* ---------------- the match ---------------- */
 
-    function beginMatch(spec, { duo = false, resume = null } = {}) {
+    function beginMatch(spec, { duo = false, resume = null, replay = false, daily = false } = {}) {
       const t = team();
       const built = buildLevel(spec);
       const board = built.board;
@@ -429,9 +505,10 @@ export default {
         board, goal: built.goal, preset: built.moves,
         teams: [t, otherTeam(t)],
         chars: [duo ? save.chars[t] : me(), duo ? save.chars[otherTeam(t)] : spec.rival],
-        turn: 0, history: [], playerMoves: 0, freeHint: !!perk.freeHint, hints: 0,
+        turn: 0, history: [], playerMoves: 0, freeHint: (perk.freeHint ? 1 : 0) + (powerOf(me()) === 'hint' ? 1 : 0), hints: 0,
         tut: spec.kind === 'tutorial' && !duo ? 1 : 0,
         over: false, startedAt: Date.now(), selected: null,
+        replay, daily, gifted: false, undos: 0, freeUndos: 1 + (powerOf(me()) === 'undo' ? 1 : 0),
       };
       if (M.mode === 'duo' && M.chars[0] === M.chars[1]) M.chars[1] = (t === 'cat' ? DOGS : CATS)[0];
       for (const [i, j, p] of M.preset) board.play(i, j, p);
@@ -444,20 +521,23 @@ export default {
         M.turn = resume.turn;
         M.playerMoves = resume.playerMoves || 0;
         M.hints = resume.hints || 0;
-        M.freeHint = resume.freeHint ?? M.freeHint;
+        M.freeHint = Number(resume.freeHint ?? M.freeHint) || 0;
         M.tut = resume.tut || 0;
+        M.gifted = !!resume.gifted;
+        M.undos = resume.undos || 0;
       }
       renderMatch();
-      if (!resume) track('match_start', { level: spec.level, kind: duo ? 'duo' : spec.kind });
+      if (!resume) track('match_start', { level: spec.level, kind: duo ? 'duo' : spec.kind, replay: replay ? 1 : 0 });
       persist();
       if (M.tut === 1) tutorialStep();
       next();
     }
 
     function persist() {
-      if (!M || M.mode === 'duo' || M.over) { save.match = null; return; }
+      if (!M || M.mode === 'duo' || M.over || M.replay || M.daily) { save.match = null; return; }
       save.match = {
         level: M.spec.level, team: M.teams[0], turn: M.turn, playerMoves: M.playerMoves, hints: M.hints, freeHint: M.freeHint, tut: M.tut,
+        gifted: M.gifted, undos: M.undos,
         moves: M.history.map((h) => (h.nap ? ['nap', h.player] : [h.rec.i, h.rec.j, h.player])),
       };
     }
@@ -485,7 +565,7 @@ export default {
           ${duo ? '' : sideCard(1)}
         </div>
         ${M.goal ? `<div class="tg-goal">${I.puzzle}<div><b>${esc(buildGoalText(M.spec).title)}</b><small>${esc(buildGoalText(M.spec).line)}</small></div><span class="tg-goal-n"><b data-goal-n>${M.goal.moves || ''}</b><small>${M.goal.moves ? (M.goal.moves === 1 ? 'move' : 'moves') : ''}</small></span></div>` : ''}
-        <div class="tg-yard-wrap"><div class="tg-yard ${M.spec.zone.id} ${M.board.dots.some((d) => d.wave) ? 'night' : ''}">
+        <div class="tg-yard-wrap"><div class="tg-yard ${M.spec.zone.id} ${M.board.dots.some((d) => d.wave) ? 'night' : ''} theme-${theme}">
           <svg class="tg-svg" viewBox="${-PAD} ${-PAD} ${W + 2 * PAD} ${H + 2 * PAD}" role="img" aria-label="The yard">
             <defs>
               <g id="tg-paw" fill="#fff" opacity=".92">${PAW}</g>
@@ -494,11 +574,11 @@ export default {
             <g class="L-puddles"></g><g class="L-tris"></g><g class="L-treats"></g><g class="L-lines"></g><g class="L-hint"></g><g class="L-ghost"></g><g class="L-dots"></g><g class="L-fx"></g>
           </svg>
         </div></div>
-        <div class="tg-coach" aria-live="polite"><span class="tg-coach-face"><img src="${img(face(M.chars[0]))}" alt=""></span><p data-coach></p></div>
+        <div class="tg-coach" aria-live="polite"><span class="tg-coach-face"><img src="${img(face(M.chars[0]))}" alt=""></span><p data-coach></p><button class="tg-rules-btn" data-act="rules" aria-label="How to play">${I.rules}</button></div>
         <div class="tg-actions">
           <button class="tg-act" data-act="hint">${I.hint}<span>Hint</span><em data-hint-cost></em></button>
+          <button class="tg-act" data-act="undo">${I.undo}<span>Undo</span><em data-undo-cost></em></button>
           <button class="tg-act" data-act="emote0">${I.talk}<span>${TEAM[ta].emote}</span></button>
-          <button class="tg-act" data-act="rules">${I.rules}<span>Rules</span></button>
         </div>`, M.spec.zone.id);
       const svg = viewEl.querySelector('.tg-svg');
       M.svg = svg;
@@ -506,6 +586,7 @@ export default {
       drawBoard();
       bindInput(svg);
       viewEl.querySelector('[data-act="hint"]').addEventListener('click', useHint);
+      viewEl.querySelector('[data-act="undo"]').addEventListener('click', undoLast);
       viewEl.querySelector('[data-act="emote0"]').addEventListener('click', () => emote(0));
       viewEl.querySelector('[data-act="emote1"]')?.addEventListener('click', () => emote(1));
       viewEl.querySelector('[data-act="rules"]').addEventListener('click', showRules);
@@ -610,7 +691,14 @@ export default {
       }
       for (const s of viewEl.querySelectorAll('.tg-side')) s.classList.toggle('active', Number(s.dataset.side) === M.turn && !M.over);
       const cost = viewEl.querySelector('[data-hint-cost]');
-      if (cost) cost.innerHTML = M.freeHint ? 'free' : `<img src="${img('img/coin.png')}" alt="">${hintCost()}`;
+      if (cost) cost.innerHTML = M.freeHint > 0 ? 'free' : `<img src="${img('img/coin.png')}" alt="">${hintCost()}`;
+      const undoBtn = viewEl.querySelector('[data-act="undo"]');
+      if (undoBtn) {
+        undoBtn.disabled = !canUndo();
+        undoBtn.hidden = M.mode !== 'level';
+        const uc = viewEl.querySelector('[data-undo-cost]');
+        if (uc) uc.innerHTML = undoFree() ? 'free' : `<img src="${img('img/coin.png')}" alt="">${UNDO_COST}`;
+      }
       const hintBtn = viewEl.querySelector('[data-act="hint"]');
       if (hintBtn) hintBtn.disabled = M.over || M.turn !== 0 || M.mode === 'duo' || M.tut === 1 || M.tut === 2;
       const gn = viewEl.querySelector('[data-goal-n]');
@@ -786,8 +874,11 @@ export default {
       M.busy = true;
       host.busy(true);
       select(null);
+      clearReady();
       const rec = apply(i, j, who, false);
       if (who === 0) M.playerMoves++;
+      // Leaving a triangle open for the rival costs the third star.
+      if (who === 0 && M.mode === 'level' && !M.tut && bestGain(M.board) > 0) M.gifted = true;
       M.busy = false;
 
       if (M.tut === 1) { M.tut = 1.5; }
@@ -822,7 +913,11 @@ export default {
         if (player === 0 && M.mode !== 'duo') {
           host.stat('triangles', rec.closed.length);
           const treats = rec.closed.filter((t) => t.points > 1).length;
-          if (treats) { host.stat('treats', treats); if (perk.treatCoins) host.wallet.earn(perk.treatCoins * treats, 'treat'); }
+          if (treats) {
+            host.stat('treats', treats);
+            const per = (perk.treatCoins || 0) + (powerOf(me()) === 'treats' ? 10 : 0);
+            if (per) host.wallet.earn(per * treats, 'treat');
+          }
           if (rec.closed.length > 1) { host.stat('doubles'); toast(`<b>Double!</b> One line, two triangles.`); }
           setFace(1, 'sad');
           setTimeout(() => M && setFace(1, 'happy'), 900);
@@ -859,6 +954,7 @@ export default {
         if (M.tut === 3) { M.tut = 4; coach('Now claim as many as you can. <b>Most triangles wins!</b>'); }
         else if (M.tut === 2) tutorialStep();
         else if (!M.tut) coach(playerLine());
+        scheduleReady();
         return;
       }
       await rivalTurn();
@@ -940,19 +1036,117 @@ export default {
       M.svg.addEventListener('pointerdown', stop, { once: true });
     }
 
+    /* ----- undo, and the gentle "a triangle is ready" nudge ----- */
+
+    const UNDO_COST = 20;
+    const undoFree = () => M.undos < M.freeUndos;
+    function canUndo() {
+      return M && !M.over && !M.busy && M.turn === 0 && M.mode === 'level' && !M.tut
+        && M.history.some((h) => !h.nap && h.player === 0);
+    }
+
+    /** Take back your last line, and the rival's answer to it. */
+    function undoLast() {
+      if (!canUndo()) return;
+      if (!undoFree()) {
+        if (!host.wallet.canAfford(UNDO_COST)) { host.sound('error'); coach(`An undo costs ${UNDO_COST} coins. Win matches to earn more!`); return; }
+        host.wallet.spend(UNDO_COST, 'undo');
+      }
+      clearReady();
+      while (M.history.length) {
+        const h = M.history.pop();
+        if (!h.nap) M.board.undo(h.rec);
+        if (h.player === 0 && !h.nap) {
+          M.playerMoves = Math.max(0, M.playerMoves - 1);
+          break;
+        }
+      }
+      M.undos++;
+      host.sound('undo');
+      track('undo_used', { level: M.spec.level, free: M.undos <= M.freeUndos ? 1 : 0 });
+      drawBoard();
+      updateHud();
+      persist();
+      coach('Taken back. <b>Your move.</b>');
+      scheduleReady();
+    }
+
+    /** After a quiet 5 seconds on the player's turn, point out a triangle ready to close. */
+    function helperOn() {
+      return M.mode === 'level' && !M.tut && (M.spec.level <= 20 || powerOf(me()) === 'helper');
+    }
+    function scheduleReady() {
+      clearReady();
+      if (!M || !helperOn()) return;
+      M.readyT = setTimeout(() => {
+        if (!M || M.over || M.turn !== 0 || M.busy || paused) return;
+        let best = null, g = 0;
+        for (const [i, j] of M.board.legalMoves()) { const v = M.board.gain(i, j); if (v > g) { g = v; best = [i, j]; } }
+        if (!best) return;
+        const a = M.board.dots[best[0]], b = M.board.dots[best[1]];
+        el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: 'ready-line' }, M.L.hint);
+        coach('Psst: a triangle is <b>ready to close</b>. See the glow?');
+      }, 5000);
+    }
+    function clearReady() {
+      if (!M) return;
+      clearTimeout(M.readyT);
+      M.L?.hint.querySelectorAll('.ready-line').forEach((l) => l.remove());
+    }
+
+    /* ----- achievements ----- */
+
+    async function checkAchievements() {
+      const ctx = { stats: host.stats || {}, save, stars: totalStars(save.stars) };
+      for (const a of ACHIEVEMENTS) {
+        if (save.ach[a.id] || !a.done(ctx)) continue;
+        save.ach[a.id] = today();
+        host.wallet.earn(a.reward, 'achievement');
+        track('achievement', { id: a.id, reward: a.reward });
+        host.sound('claim-big');
+        await ask(`
+          <div class="tg-kicker green">Achievement</div>
+          <div class="tg-medal">${I.trophy}</div>
+          <h2 class="tg-card-title">${esc(a.name)}</h2>
+          <p class="tg-card-line">${esc(a.text)}</p>
+          <div class="tg-coins"><img src="${img('img/coin.png')}" alt="">+${a.reward}</div>
+          <button class="tg-btn go" data-act="ok">Nice!</button>`, 'win');
+      }
+      host.save();
+    }
+
+    async function showAchievements() {
+      const ctx = { stats: host.stats || {}, save, stars: totalStars(save.stars) };
+      const got = ACHIEVEMENTS.filter((a) => save.ach[a.id]).length;
+      await ask(`
+        <h2 class="tg-card-title">Achievements</h2>
+        <p class="tg-card-line small">${got} of ${ACHIEVEMENTS.length} · ${totalStars(save.stars)} stars collected</p>
+        <ul class="tg-ach">${ACHIEVEMENTS.map((a) => {
+          const done = !!save.ach[a.id];
+          const g = !done && a.goal ? a.goal(ctx) : null;
+          return `<li class="${done ? 'done' : ''}">
+            <span class="tg-ach-ic">${I.trophy}</span>
+            <span class="tg-ach-text"><b>${esc(a.name)}</b><small>${esc(a.text)}</small>
+              ${g ? `<span class="tg-ach-bar"><i style="width:${Math.min(100, Math.round((100 * g[0]) / g[1]))}%"></i></span>` : ''}</span>
+            <span class="tg-ach-reward">${done ? 'Done' : `<img src="${img('img/coin.png')}" alt="">${a.reward}`}</span>
+          </li>`;
+        }).join('')}</ul>
+        <button class="tg-btn go" data-act="ok">Back to the map</button>`, 'sheet');
+    }
+
     /* ----- hints, emotes, rules ----- */
 
     const hintCost = () => perk.hintCost || HINT_COST;
     async function useHint() {
       if (!myInput() || M.mode === 'duo') return;
-      if (!M.freeHint) {
+      if (!(M.freeHint > 0)) {
         if (!host.wallet.canAfford(hintCost())) {
           host.sound('error');
           coach(`A hint costs ${hintCost()} coins. Win matches to earn more!`);
           return;
         }
         host.wallet.spend(hintCost(), 'hint');
-      } else M.freeHint = false;
+      } else M.freeHint -= 1;
       M.hints++;
       track('hint_used', { level: M.spec.level });
       const m = M.mode === 'puzzle' && M.goal.kind === 'double'
@@ -1036,6 +1230,7 @@ export default {
 
     async function finish(early) {
       M.over = true;
+      clearReady();
       host.busy(false);
       updateHud();
       clearGhost();
@@ -1061,40 +1256,92 @@ export default {
 
     async function levelWin({ flawless = false, puzzle = false } = {}) {
       const spec = M.spec;
-      const coins = reward(spec) + (perk.winBonus || 0);
+      const { replay, daily } = M;
+      const [mine, theirs] = M.board.scores;
+      const stars = starsFor({ puzzle, margin: mine - theirs, gifted: M.gifted, hints: M.hints });
+      const before = save.stars[spec.level] || 0;
+      const streak = daily ? nextStreak(save.daily) : 0;
+      let coins = daily ? dailyReward(streak) : reward(spec);
+      if (replay) coins = Math.max(10, Math.round(coins / 2));
+      coins += (perk.winBonus || 0) + (powerOf(me()) === 'coins' ? 15 : 0);
+
       host.stat('wins');
       if (flawless) host.stat('flawless');
-      if (spec.kind === 'boss') host.stat('bosses');
+      if (spec.kind === 'boss' && !replay) host.stat('bosses');
       if (puzzle) host.stat('puzzles');
       save.wins++;
+      save.teamWins[team()] = (save.teamWins[team()] || 0) + 1;
+      if (spec.kind === 'boss') {
+        if (!save.bossWins.includes(spec.level)) save.bossWins.push(spec.level);
+        if (!M.hints && !M.undos) save.cleanBoss = true;
+      }
+      if (!daily) save.stars[spec.level] = Math.max(before, stars);
+      if (daily) save.daily = { last: today(), streak, best: Math.max(save.daily.best || 0, streak) };
+
       host.sound('levelup');
       setFace(0, 'happy'); setFace(1, 'sad');
       const cheer = pose(M.chars[0], 'cheer');
       const canDouble = host.rewarded.available('double-coins');
-      const kicker = spec.kind === 'boss' ? 'Boss beaten!' : puzzle ? 'Puzzle solved!' : `Level ${spec.level} complete`;
-      const title = spec.kind === 'tutorial' ? 'Your first win!' : puzzle ? 'Clever paws!' : 'The yard is yours!';
+      const kicker = daily ? `Daily Yard · ${streak} day streak` : replay ? `Replay · level ${spec.level}` : spec.kind === 'boss' ? 'Boss beaten!' : puzzle ? 'Puzzle solved!' : `Level ${spec.level} complete`;
+      const title = spec.kind === 'tutorial' ? 'Your first win!' : puzzle ? 'Clever paws!' : daily ? 'Today\u2019s yard is yours!' : 'The yard is yours!';
+      const starRow = daily ? '' : `<div class="tg-stars" aria-label="${stars} of 3 stars">${[0, 1, 2].map((k) => `<i class="${k < stars ? 'on' : ''}" style="--k:${k}">${I.star}</i>`).join('')}</div>
+        ${puzzle ? '' : `<ul class="tg-star-why">${starLines.map((line, k) => `<li class="${(k === 0 || (k === 1 && mine - theirs >= 3) || (k === 2 && !M.gifted)) ? 'on' : ''}">${esc(line)}</li>`).join('')}</ul>`}
+        ${replay && stars <= before ? `<p class="tg-card-line small">Your best here is ${before} ${before === 1 ? 'star' : 'stars'}.</p>` : ''}`;
       const act = await ask(`
         <div class="tg-confetti" aria-hidden="true">${Array.from({ length: 14 }, (_, k) => `<i style="--k:${k}"></i>`).join('')}</div>
         <div class="tg-kicker green">${esc(kicker)}</div>
         <h2 class="tg-card-title big">${esc(title)}</h2>
         <img class="tg-win-art ${M.teams[0]}" src="${img(cheer)}" alt="">
-        ${puzzle ? '' : `<div class="tg-final"><span class="${M.teams[0]}">${M.board.scores[0]}</span><i>–</i><span class="${M.teams[1]}">${M.board.scores[1]}</span><img src="${img(face(M.chars[1], 'sad'))}" alt=""></div>`}
+        ${starRow}
+        ${puzzle ? '' : `<div class="tg-final"><span class="${M.teams[0]}">${mine}</span><i>–</i><span class="${M.teams[1]}">${theirs}</span><img src="${img(face(M.chars[1], 'sad'))}" alt=""></div>`}
         <div class="tg-coins"><img src="${img('img/coin.png')}" alt="">+${coins}</div>
-        <button class="tg-btn go" data-act="next">${spec.kind === 'tutorial' ? 'Keep playing' : 'Next level'}</button>
+        <button class="tg-btn go" data-act="next">${spec.kind === 'tutorial' ? 'Keep playing' : replay || daily ? 'Back to the map' : 'Next level'}</button>
         ${canDouble ? `<button class="tg-btn ghost" data-act="double">${I.ad}<span>Watch to double: +${coins * 2}</span></button>` : ''}`, 'win');
       let paid = coins;
       if (act === 'double' && await host.rewarded.show('double-coins')) paid = coins * 2;
-      host.wallet.earn(paid, 'win');
-      host.levelWon({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
-      track('match_won', { level: spec.level, kind: spec.kind, hints: M.hints });
-      save.level = Math.max(save.level, spec.level + 1);
-      save.streak = null;
-      save.best = Math.max(save.best, spec.level);
+      host.wallet.earn(paid, daily ? 'daily-yard' : 'win');
+      track(daily ? 'daily_yard_won' : replay ? 'replay_won' : 'match_won', { level: spec.level, kind: spec.kind, hints: M.hints, undos: M.undos, stars, streak: streak || undefined });
+      const was = save.level;
+      if (!replay && !daily) {
+        host.levelWon({ level: spec.level, kind: spec.kind, score: `${mine}-${theirs}`, team: M.teams[0], stars });
+        save.level = Math.max(save.level, spec.level + 1);
+        save.streak = null;
+        save.best = Math.max(save.best, spec.level);
+      }
       M = null;
       host.save();
-      await host.levelBreak();
-      await host.moment('level-complete');
+      if (!replay && !daily) {
+        await host.levelBreak();
+        await host.moment('level-complete');
+      }
+      await newFriends(was, save.level);
+      await checkAchievements();
       showMap();
+    }
+
+    /** Characters who join when a zone boss falls: one cat and one dog. */
+    async function newFriends(from, to) {
+      if (to <= from) return;
+      const ids = [];
+      for (let lv = from + 1; lv <= to; lv++) ids.push(...joiningAt(lv));
+      if (!ids.length) return;
+      const mineNew = ids.filter((id) => (team() === 'cat' ? CATS : DOGS).includes(id));
+      const show = mineNew.length ? mineNew : ids;
+      await ask(`
+        <div class="tg-kicker green">New friend!</div>
+        <div class="tg-friends">${ids.map((id) => `<span class="tg-friend"><img src="${img(face(id))}" alt=""><b>${nameOf(id)}</b></span>`).join('')}</div>
+        <h2 class="tg-card-title">${show.map(nameOf).join(' and ')} ${show.length > 1 ? 'join' : 'joins'} the neighbourhood</h2>
+        <p class="tg-card-line">${esc(POWERS[powerOf(show[0])])}</p>
+        <p class="tg-card-line small">Pick ${show.length > 1 ? 'them' : nameOf(show[0])} any time from your name on the map.</p>
+        <button class="tg-btn go" data-act="ok">Hooray!</button>`);
+      track('character_unlocked', { ids: ids.join(',') });
+    }
+
+    /** Play the same match again, the same way it was started. */
+    function again(spec, replay, daily) {
+      if (daily) return beginMatch(dailySpec(today(), save.level, team()), { daily: true });
+      if (replay) return replayLevel(spec.level);
+      return startLevel(spec.level, { quick: true });
     }
 
     async function levelLose() {
@@ -1123,13 +1370,16 @@ export default {
         track('undo_moves', { level: spec.level });
         return undoThree();
       }
-      host.levelLost({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
-      track('match_lost', { level: spec.level, kind: spec.kind, losses: lossesAt(spec.level) + 1 });
-      save.streak = { level: spec.level, n: lossesAt(spec.level) + 1 };
+      const { replay, daily } = M;
+      if (!replay && !daily) {
+        host.levelLost({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
+        save.streak = { level: spec.level, n: lossesAt(spec.level) + 1 };
+      }
+      track(daily ? 'daily_yard_lost' : 'match_lost', { level: spec.level, kind: spec.kind, losses: lossesAt(spec.level), replay: replay ? 1 : 0 });
       M = null;
       host.save();
       if (act === 'map') return showMap();
-      return startLevel(spec.level, { quick: true });
+      return again(spec, replay, daily);
     }
 
     function undoThree() {
@@ -1159,10 +1409,11 @@ export default {
         <p class="tg-card-line">So close. One more triangle and the yard is yours.</p>
         <button class="tg-btn go" data-act="again">${I.retry}<span>Play again</span></button>
         <button class="tg-link" data-act="map">Back to the map</button>`, 'lose');
+      const { replay, daily } = M;
       M = null;
       host.save();
       if (act === 'map') return showMap();
-      return startLevel(spec.level, { quick: true });
+      return again(spec, replay, daily);
     }
 
     async function puzzleWin() {
@@ -1187,10 +1438,11 @@ export default {
         <button class="tg-btn go" data-act="again">${I.retry}<span>Try again (free)</span></button>
         <button class="tg-link" data-act="map">Back to the map</button>`, 'lose');
       track('puzzle_failed', { level: spec.level, kind: M.goal.kind });
+      const { replay } = M;
       M = null;
       host.save();
       if (act === 'map') return showMap();
-      return beginMatch(levelSpec(spec.level, team()));
+      return replay ? replayLevel(spec.level) : beginMatch(levelSpec(spec.level, team()));
     }
 
     /* ----- two players ----- */
@@ -1202,6 +1454,7 @@ export default {
     }
 
     async function duoResult() {
+      host.stat('duo');
       const [a, b] = M.board.scores;
       const winner = a === b ? -1 : a > b ? 0 : 1;
       host.sound(winner < 0 ? 'setback' : 'levelup');
@@ -1213,6 +1466,7 @@ export default {
         <button class="tg-btn go" data-act="again">${I.retry}<span>Play again</span></button>
         <button class="tg-link" data-act="map">Back to the map</button>`, 'win');
       M = null;
+      await checkAchievements();
       if (act === 'map') return showMap();
       return startDuo();
     }
@@ -1231,7 +1485,7 @@ export default {
       yard.style.height = `${Math.floor(h)}px`;
     }
     // For browser tests under ?dev=1: read-only peeks at the match.
-    if (host.dev) globalThis.__tg = { get M() { return M; }, get save() { return save; }, get view() { return view; }, map() { layer.innerHTML = ''; M = null; save.match = null; showMap(); } };
+    if (host.dev) globalThis.__tg = { get M() { return M; }, get save() { return save; }, get view() { return view; }, map() { layer.innerHTML = ''; M = null; save.match = null; showMap(); }, win() { if (M && !M.over) { M.board.scores[0] = M.board.scores[1] + 5; finish(true); } } };
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => relayout()) : null;
     ro?.observe(viewEl);
@@ -1243,6 +1497,7 @@ export default {
         if (saved) {
           Object.assign(save, saved, { chars: { ...save.chars, ...(saved.chars || {}) }, seen: { ...(saved.seen || {}) } });
         }
+        for (const t of ['cat', 'dog']) if (!isUnlocked(save.chars[t], save.level)) save.chars[t] = t === 'cat' ? 'patch' : 'rex';
         applyMascot();
         report();
       },
@@ -1289,6 +1544,11 @@ export default {
         startLevel(lv, { quick: true });
       },
       setPerk(config) { perk = config || {}; if (M) updateHud(); },
+      setCosmetic(id) {
+        theme = THEMES.some((x) => x.id === id) ? id : 'lawn';
+        const y = viewEl.querySelector('.tg-yard');
+        if (y) y.className = y.className.replace(/theme-\S+/, `theme-${theme}`);
+      },
       relayout,
       rewardValue: () => 60 + 10 * zoneOf(save.level).index,
       canOffer: (task) => !task.from || save.level >= task.from,
