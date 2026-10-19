@@ -58,11 +58,23 @@ export const STYLES = {
 };
 
 /**
+ * A rival of any skill from 0 (barely trying) to 1 (never misses, never gives
+ * anything away, looks one reply ahead). Levels use this so the rival gets a
+ * little better every level instead of jumping between named styles.
+ */
+export function skilled(skill) {
+  const s = Math.max(0, Math.min(1, skill));
+  // Looking a reply ahead fades in from skill 0.85, a move at a time, so the
+  // strongest rivals get there gradually rather than all at once.
+  return { take: 0.3 + 0.7 * s, careful: Math.max(0, Math.min(1, (s - 0.05) * 1.15)), lookChance: Math.max(0, (s - 0.85) * 4), skill: s };
+}
+
+/**
  * Pick a line for player `me`, or null to skip (only the sleepy style does).
  * opts: { style, rand, band, lead } — lead is my score minus theirs.
  */
 export function choose(board, me, { style = 'normal', rand = Math.random, band = 0, lead = 0 } = {}) {
-  const s = STYLES[style] || STYLES.normal;
+  const s = typeof style === 'object' ? style : STYLES[style] || STYLES.normal;
   const moves = shuffle(board.legalMoves(), rand);
   if (!moves.length) return null;
 
@@ -78,7 +90,7 @@ export function choose(board, me, { style = 'normal', rand = Math.random, band =
     return (gifts.length && rand() < 0.7 ? gifts : quiet)[0];
   }
 
-  if (s.look && !holdBack) return lookahead(board, me, moves);
+  if ((s.look || (s.lookChance && rand() < s.lookChance)) && !holdBack) return lookahead(board, me, moves);
 
   if (scoring.length && !holdBack && rand() < s.take) {
     let best = scoring[0], bestG = -1;

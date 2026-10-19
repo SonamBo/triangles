@@ -12,7 +12,7 @@
  */
 
 import { Board, FENCE } from './board.js';
-import { choose, bestGain, exposure } from './ai.js';
+import { choose, bestGain, exposure, skilled } from './ai.js';
 import { W, H, dist, rng } from './geom.js';
 
 /* ---------------- characters ---------------- */
@@ -62,25 +62,38 @@ export function zoneOf(level) {
 
 /* ---------------- a level ---------------- */
 
-const STYLE_BACKYARD = [null, 'sleepy', 'easy', 'easy', 'easy', null, 'mild', 'mild', 'mild', 'steady', 'firm'];
-const STYLE_LATER = [null, 'mild', 'steady', 'steady', 'steady', null, 'steady', 'firm', 'firm', 'firm', 'normal'];
-const STYLE_ROUND2 = [null, 'steady', 'firm', 'firm', 'normal', null, 'normal', 'normal', 'normal', 'smart', 'smart'];
+/**
+ * How good the rival is, 0..1. It climbs a little every level: about 0.2 by
+ * the end of the Backyard, 0.4 by the end of the Park, 0.7 at Fence Row's end,
+ * 0.8 in the Night Garden and near-perfect late in round two. A new zone opens slightly easier (its twist is
+ * new), and a boss is a step harder than the levels around it. Each loss in a
+ * row on the same level takes some off, so nobody is stuck for long.
+ */
+export function rivalSkill(level, losses = 0) {
+  const p = (level - 1) % 10 + 1;
+  let s = level <= 4 ? 0.05 : 0.05 + 0.9 * Math.pow(Math.max(0, level - 2) / 58, 0.8);
+  if (p <= 2 && level > 10) s -= 0.04;
+  if (p === 10) s += 0.1;
+  s -= 0.08 * Math.min(3, losses);
+  return Math.max(0, Math.min(0.97, s));
+}
+
 const PUZZLES = ['double', 'safe', 'comeback'];
 
 /**
  * Everything about a level except its board. `team` is the player's team;
  * the rival is always from the other one.
  */
-export function levelSpec(level, team = 'cat') {
+export function levelSpec(level, team = 'cat', { losses = 0 } = {}) {
   const zone = zoneOf(level);
   const p = (level - 1) % 10 + 1;
   const kind = level === 1 ? 'tutorial' : p === 10 ? 'boss' : p === 5 ? 'puzzle' : 'match';
   const other = team === 'cat' ? 'dog' : 'cat';
   const rival = level === 1 ? (other === 'dog' ? 'pup' : 'kitten') : zone.rival[team];
-  const table = zone.round ? STYLE_ROUND2 : zone.index ? STYLE_LATER : STYLE_BACKYARD;
-  const style = kind === 'puzzle' ? (zone.index ? 'normal' : 'steady') : table[p];
+  const skill = kind === 'tutorial' ? 0 : rivalSkill(level, losses);
+  const style = kind === 'tutorial' ? 'sleepy' : kind === 'puzzle' ? (zone.index ? 'normal' : 'steady') : skilled(skill);
   // A new player gets a rival that stops pulling ahead once it leads by `band`.
-  const band = level <= 3 ? 1 : level <= 4 ? 2 : level <= 9 ? 3 : 0;
+  const band = level <= 4 ? 1 : level <= 9 ? 3 : 0;
 
   let dots;
   if (zone.index === 0) dots = [7, 8, 9, 10, 10, 11, 12, 12, 13, 14][p - 1];
@@ -100,7 +113,7 @@ export function levelSpec(level, team = 'cat') {
 
   const puzzle = kind === 'puzzle' ? PUZZLES[zone.index % PUZZLES.length] : null;
   return {
-    level, zone, p, kind, rival, style, band, dots, twists, puzzle,
+    level, zone, p, kind, rival, style, skill, band, dots, twists, puzzle,
     first: level <= 4 || level % 2 === 0 ? 0 : 1,       // who draws the first line
     seed: level * 7919 + 17,
   };

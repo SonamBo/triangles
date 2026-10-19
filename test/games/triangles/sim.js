@@ -54,7 +54,7 @@ for (let level = 1; level <= last; level++) {
     if (level === 1 && pct < 100) { problems++; console.error(`level 1 lost by a ${me} bot`); }
     if (games >= 10 && level >= 2 && level <= 4 && me === 'steady' && pct < 70) { problems++; console.error(`level ${level}: a new player wins only ${pct}%`); }
   }
-  rows.push(`${String(level).padStart(3)}  ${spec.zone.name.padEnd(14)} ${spec.kind.padEnd(6)} ${spec.style.padEnd(7)} dots ${String(spec.dots).padStart(2)}  ${cells.join('  ')}  ~${Math.round(lines / (games * PLAYERS.length))} lines`);
+  rows.push(`${String(level).padStart(3)}  ${spec.zone.name.padEnd(14)} ${spec.kind.padEnd(6)} ${(typeof spec.style === 'object' ? 'skill ' + spec.skill.toFixed(2) : spec.style).padEnd(10)} dots ${String(spec.dots).padStart(2)}  ${cells.join('  ')}  ~${Math.round(lines / (games * PLAYERS.length))} lines`);
 }
 console.log(rows.join('\n'));
 process.exit(problems ? 1 : 0);

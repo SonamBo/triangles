@@ -73,6 +73,7 @@ export default {
     { id: 'win-3', tier: 'medium', text: 'Win 3 matches', stat: 'wins', target: 3 },
     { id: 'tri-40', tier: 'medium', text: 'Claim 40 triangles', stat: 'triangles', target: 40 },
     { id: 'treat-3', tier: 'medium', text: 'Claim 3 treat triangles', stat: 'treats', target: 3, from: 11 },
+    { id: 'win-5', tier: 'hard', text: 'Win 5 matches', stat: 'wins', target: 5 },
     { id: 'double-1', tier: 'hard', text: 'Close two triangles with one line', stat: 'doubles', target: 1, from: 3 },
     { id: 'flawless-1', tier: 'hard', text: 'Win without your rival scoring', stat: 'flawless', target: 1, from: 2 },
     { id: 'puzzle-1', tier: 'hard', text: 'Solve a puzzle level', stat: 'puzzles', target: 1, from: 5 },
@@ -108,6 +109,8 @@ export default {
     function releaseTimers() { for (const j of waiters) if (!j.timer) j.arm(); }
 
     const team = () => save.team || 'cat';
+    // Losses in a row on the level being played; the rival eases off a little for each.
+    const lossesAt = (level) => (save.streak && save.streak.level === level ? save.streak.n : 0);
     const me = () => save.chars[team()];
 
     /* ---------------- cards ---------------- */
@@ -324,7 +327,7 @@ export default {
     /* ---------------- starting a match ---------------- */
 
     async function startLevel(level, { quick = false } = {}) {
-      const spec = levelSpec(level, team());
+      const spec = levelSpec(level, team(), { losses: lossesAt(level) });
       // A zone's twist, explained the first time it turns up.
       const tw = spec.zone.twist;
       if (!quick && tw && !save.seen[tw] && spec.zone.round === 0) {
@@ -1060,6 +1063,7 @@ export default {
       host.levelWon({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
       host.track('match_won', { level: spec.level, kind: spec.kind, hints: M.hints });
       save.level = Math.max(save.level, spec.level + 1);
+      save.streak = null;
       save.best = Math.max(save.best, spec.level);
       M = null;
       host.save();
@@ -1095,7 +1099,8 @@ export default {
         return undoThree();
       }
       host.levelLost({ level: spec.level, kind: spec.kind, score: M.board.scores.join('-'), team: M.teams[0] });
-      host.track('match_lost', { level: spec.level, kind: spec.kind });
+      host.track('match_lost', { level: spec.level, kind: spec.kind, losses: lossesAt(spec.level) + 1 });
+      save.streak = { level: spec.level, n: lossesAt(spec.level) + 1 };
       M = null;
       host.save();
       if (act === 'map') return showMap();
@@ -1221,7 +1226,7 @@ export default {
         if (M && view === 'match') { report(); return; }
         if (!save.team) return showPick();
         if (save.match && save.match.level === save.level) {
-          const spec = levelSpec(save.match.level, save.match.team || team());
+          const spec = levelSpec(save.match.level, save.match.team || team(), { losses: lossesAt(save.match.level) });
           const resume = save.match;
           try { beginMatch(spec, { resume }); return; } catch { save.match = null; }
         }
@@ -1246,6 +1251,7 @@ export default {
         return false;
       },
       async restart() {
+        if (!M && save.team && view === 'map') { startLevel(save.level, { quick: true }); return; }
         if (!M || M.mode === 'duo' || M.over) return;
         if (M.playerMoves > 0 && M.mode !== 'puzzle') {
           if (!await host.confirmLevelLoss()) return;

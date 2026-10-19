@@ -7,7 +7,7 @@ Sent with `host.track()`. The shell's events (app_ready, level_up, level_lost, e
 | `team_picked` | First launch, after choosing a team | `team`: cat \| dog |
 | `match_start` | A match or puzzle begins (not on resume) | `level`, `kind`: tutorial \| match \| boss \| puzzle \| duo |
 | `match_won` | A level is won, after the reward | `level`, `kind`, `hints` |
-| `match_lost` | A loss is final (the player didn't undo) | `level`, `kind` |
+| `match_lost` | A loss is final (the player didn't undo) | `level`, `kind`, `losses` (in a row on this level; the rival eases off 0.08 skill per loss, up to 3) |
 | `hint_used` | A hint is shown | `level` |
 | `undo_moves` | The rewarded "Undo 3 moves" was earned | `level` |
 | `puzzle_failed` | A puzzle level was missed | `level`, `kind`: double \| safe \| comeback |
