@@ -7,6 +7,6 @@ export default {
   "applicationId": "com.pixelartgames.triangles",
   "versionCode": 1,
   "versionName": "1.0.0",
-  "privacyUrl": "https://example.com/privacy-policy/",
+  "privacyUrl": "https://sonambo.github.io/triangles-privacy/",
   "contactEmail": "you@example.com"
 };

@@ -1,47 +1,63 @@
-# «Game name»: brand kit
+# Triangles – Cats vs Dogs: brand kit
 
 What any store art, trailer or listing for this game must match. The
-`marketing-creatives` skill reads this first. Fill in every «placeholder».
+`marketing-creatives` skill reads this first.
 
 ## Name and title
 
-- **«Game name»**, written exactly like that in anything a player sees.
-- Title lettering: «describe it: font feel, colours, any icon inside a letter».
-  Reference: `references/«title image»`.
+- **Triangles – Cats vs Dogs**, with an en dash. Where a dash won't fit (some
+  store fields), "Triangles: Cats vs Dogs". Never "Triangle" or "Cats vs. Dogs".
+- Title lettering, as in `www/img/logo.png`:
+  - "Triangles" in heavy rounded charcoal letters (`#3b3330`), with an orange
+    triangle and three dark dots in front of it;
+  - below it, "Cats" in orange (`#e8862a`), a small grey "vs", "Dogs" in blue
+    (`#2d5f9e`).
 
 ## Characters
 
-| Character | Look |
-|---|---|
-| «hero» | «colours, markings» |
+| Team | Characters | Look |
+|---|---|---|
+| Cats | **Patch** (hero), Mittens, Marmalade, Pepper, Biscuit | The Cash Paws cats: grey-and-white, black-and-white, orange tabby, grey tabby, cream |
+| Dogs | **Rex** (hero), Bruno, Daisy, Pip, Dotty, the Pup | Beagle, bulldog, golden retriever, husky, dalmatian, cream puppy |
 
-Style: «e.g. flat vector, thick outlines, soft shading».
-The shell's cats ship as they are; describe them here if your art uses them.
+Style:
+- flat vector, kawaii mobile-game art;
+- thick dark-brown outlines (`#3b2a1e`), soft cel shading, rosy cheeks;
+- cats and dogs are friendly rivals, never fighting.
 
 ## The game in one line
 
-«What the player does, and what pays off.»
+Take turns joining dots with lines that never cross; close an empty triangle
+to claim it; whoever owns the most triangles wins the yard.
 
 ## Palette
 
-«Background, primary button, key piece colours, with hex codes.»
+- Lawn: `#deeaba`, `#c9d6a4`; cream cards `#fbf7f0`.
+- Team Cat orange `#f2a043`; Team Dog blue `#4a80c4`.
+- Primary button green `#3f7a52` (shared with Cash Paws).
+- Each zone has its own ground: Backyard green, Park spring green, Rainy Lane
+  blue-grey, Fence Row sand, Night Garden navy.
 
 ## Voice
 
-«e.g. cosy and playful, short sentences, never pushy: no "Play now!".»
+- Cosy, warm, a little playful; cat-and-dog jokes are welcome.
+- Short sentences.
+- Never pushy: no "Play now!", no countdowns.
 
-## References (`references/`)
+## References
 
 | File | Use |
 |---|---|
-| «ref-title.png» | Title lettering |
-| «ref-hero.png» | The hero character |
-| «ref-gameplay.png» | A frame of play (take one from `marketing/out/` after recording) |
+| `www/img/logo.png` | Title lettering |
+| `www/img/cat-hero.png` | Patch, the style target for all new art |
+| `www/games/triangles/img/hero-dog.png` | Rex |
+| `play-assets/screenshots/` | Frames of real play |
 
 ## Where things are
 
 | Folder | What |
 |---|---|
+| `ART-PROMPTS.md` | Gemini prompts for the icon, feature graphic, dogs and backgrounds |
+| `play/LISTING.md` | Play Store text and App content answers |
 | `crazygames/` | CrazyGames: `LISTING.md`, `COVER-PROMPTS.md`, `covers/` |
 | `showcase.mjs` | The trailer the video recorder plays |
-| `out/` | Generated videos; not committed |

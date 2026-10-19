@@ -1,31 +1,29 @@
-# Privacy Policy — template
+# Privacy Policy — Triangles – Cats vs Dogs 1.0
 
-> **Fill in every «placeholder», then publish it** at the `privacyUrl` in
-> `www/app.config.js` (a free GitHub Pages site works). It describes what the
-> shell does: Firebase, AdMob with Ad breaks past level 10, reminders, Bell
-> Quest, the Rewards Box. If your game drops or adds any of that, edit to match.
-> If you never add google-services.json, delete the Firebase section.
-> Not legal advice: have it looked over if you can.
+> Publish `docs/privacy-policy/index.html` at
+> https://sonambo.github.io/triangles-privacy/ (the public repo
+> SonamBo/triangles-privacy, GitHub Pages on). Edit both together. Google
+> Analytics data retention must stay at 14 months to match.
 
 ---
 
 
-**«App name»**
-«Developer name» · «contact email» · Last updated «date»
+**Triangles – Cats vs Dogs**
+Pixel Art Games · pixelartgames000@gmail.com · Last updated 19 October 2026
 
-This policy explains what information «App name» handles, why, and the choices
+This policy explains what information Triangles – Cats vs Dogs (“the game”) handles, why, and the choices
 you have.
 
 ## What stays on your phone
 
-Your game progress (level, coins, cats, daily tasks, Bell Quest and settings)
+Your game progress (level, stars, coins, characters, achievements, daily tasks, Bell Quest and settings)
 is stored only on your device. We have no server of our own and no account
 system, so there is nothing to sign in to and no copy of your progress
 anywhere else. If you uninstall the app or clear its data, it is gone.
 
 ## Reminders
 
-If you allow notifications, «App name» can remind you when your Rewards Box is
+If you allow notifications, Triangles – Cats vs Dogs can remind you when your Rewards Box is
 ready and when a new Bell Quest is available. These reminders are scheduled
 on your phone by the app itself. No information is sent anywhere to create
 them. You can turn them off in the game (Settings → Reminders) or in your
@@ -33,12 +31,12 @@ phone's notification settings.
 
 ## Gameplay statistics and crash reports
 
-To understand how the game is played and to fix problems, «App name» uses
+To understand how the game is played and to fix problems, Triangles – Cats vs Dogs uses
 **Google Firebase**: Google Analytics for Firebase and Firebase Crashlytics.
 They receive:
 
 - gameplay events, such as levels reached and lost, how long a level took,
-  «the game's own actions», coins earned and spent in the game, daily tasks,
+  lines drawn, triangles claimed, hints and undos used, the team and character you play as, coins earned and spent in the game, daily tasks,
   Rewards Boxes, Bell Quest progress, and reminder settings;
 - advertising events: which ads were offered, shown or watched, the ad
   revenue each one earned, and technical errors when an ad fails to load;
@@ -62,10 +60,10 @@ Analytics data is kept for 14 months, then deleted automatically.
 
 ## Advertising
 
-«App name» is free and supported by ads. There are two kinds:
+Triangles – Cats vs Dogs is free and supported by ads. There are two kinds:
 
 - **Optional ads** that you choose to watch for an in-game reward, such as
-  «your game's reward», or opening the Rewards Box early.
+  doubling the coins from a win, taking back three moves after a loss, or opening the Rewards Box early.
 - **Ad breaks.** Past level 10, a short ad plays after every few minutes of
   play, announced first by an "Ad break" screen.
 
@@ -92,7 +90,7 @@ We do not sell your information for money.
 
 ## Privacy choices and consent
 
-Where the law requires it, «App name» uses Google's consent tool (the User
+Where the law requires it, Triangles – Cats vs Dogs uses Google's consent tool (the User
 Messaging Platform) to show you a privacy message before personalised ads are
 used, and to record your choice. Which message you see, if any, depends on
 where you are.
@@ -111,21 +109,21 @@ where you are.
 - **Reminders.** Sent only if you allow notifications; switch them off any
   time in Settings.
 - **Stop everything.** Uninstalling the app stops all collection. To have
-  statistics already sent deleted, contact us at «contact email»
+  statistics already sent deleted, contact us at pixelartgames000@gmail.com
   with the approximate date you installed the game.
 
 ## India
 
 If you are in India, you may contact us about how your personal data is
 handled under the Digital Personal Data Protection Act, 2023, including to
-access, correct or erase it, or to raise a grievance, at «contact email». We will respond within a reasonable time.
+access, correct or erase it, or to raise a grievance, at pixelartgames000@gmail.com. We will respond within a reasonable time.
 
 ## Children
 
-«App name» is not directed at children under 13, and we do not knowingly allow
+Triangles – Cats vs Dogs is not directed at children under 13, and we do not knowingly allow
 children's personal information to be collected. If you believe a child has
 used the app and had data collected by our ad or analytics partners, contact
-us at «contact email» and we will ask for it to be deleted.
+us at pixelartgames000@gmail.com and we will ask for it to be deleted.
 
 ## Security
 
@@ -139,4 +137,4 @@ new "last updated" date.
 
 ## Contact
 
-«Developer name» · «contact email»
+Pixel Art Games · pixelartgames000@gmail.com
