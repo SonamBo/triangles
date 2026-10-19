@@ -20,6 +20,7 @@ import {
   levelSpec, buildLevel, zoneOf, TWISTS, CATS, DOGS, nameOf, face, pose,
 } from './levels.js';
 import { SOUNDS } from './sounds.js';
+import { scenery, background } from './art.js';
 
 const TEAM = {
   cat: { name: 'Team Cat', fill: '#f2a043', deep: '#b8661a', soft: '#fff3df', tint: '#f7c37b', voice: 'meow', emote: 'Meow' },
@@ -152,9 +153,11 @@ export default {
 
     /* ---------------- views ---------------- */
 
-    function setView(name, html) {
+    function setView(name, html, zoneId = zoneOf(save.level).id) {
       view = name;
-      viewEl.className = `tg-view tg-${name} team-${team()}`;
+      viewEl.className = `tg-view tg-${name} team-${team()} zone-${zoneId}`;
+      const bg = background(zoneId);
+      viewEl.style.backgroundImage = bg ? `url("${img(bg)}")` : '';
       viewEl.innerHTML = html;
     }
 
@@ -258,6 +261,7 @@ export default {
         <div class="tg-trail">
           <div class="tg-next-zone">${I.lock} ${esc(nextZ.name)}${nextZ.twist ? ` · ${esc(TWISTS[nextZ.twist].name.toLowerCase())}` : ''} · level ${nextZ.first}</div>
           <div class="tg-path ${z.id}" style="height:${height}px">
+            ${scenery(z.id, height, z.index + 1)}
             <svg class="tg-path-line" viewBox="0 0 100 ${height}" preserveAspectRatio="none" aria-hidden="true">
               <path d="${pathD}" vector-effect="non-scaling-stroke" class="road"/>
               <path d="${pathD}" vector-effect="non-scaling-stroke" class="dash"/>
@@ -466,7 +470,7 @@ export default {
           <button class="tg-act" data-act="hint">${I.hint}<span>Hint</span><em data-hint-cost></em></button>
           <button class="tg-act" data-act="emote0">${I.talk}<span>${TEAM[ta].emote}</span></button>
           <button class="tg-act" data-act="rules">${I.rules}<span>Rules</span></button>
-        </div>`);
+        </div>`, M.spec.zone.id);
       const svg = viewEl.querySelector('.tg-svg');
       M.svg = svg;
       M.L = Object.fromEntries(['puddles', 'tris', 'treats', 'lines', 'hint', 'ghost', 'dots', 'fx'].map((k) => [k, svg.querySelector(`.L-${k}`)]));
@@ -771,7 +775,10 @@ export default {
       const { board } = M;
       const rec = board.play(i, j, player);
       M.history.push({ rec, player });
-      drawLine(i, j, player, animate);
+      M.L.lines.querySelectorAll('.last').forEach((l) => l.classList.remove('last', 'cat', 'dog'));
+      const ln = drawLine(i, j, player, animate);
+      // Mark the rival's line (or, with two players, the last line) until the next one.
+      if (player === 1 || M.mode === 'duo') ln.classList.add('last', M.teams[player]);
       host.sound('line');
       host.haptic(8);
       const tm = M.teams[player];
@@ -1192,7 +1199,7 @@ export default {
       yard.style.height = `${Math.floor(h)}px`;
     }
     // For browser tests under ?dev=1: read-only peeks at the match.
-    if (host.dev) globalThis.__tg = { get M() { return M; }, get save() { return save; }, get view() { return view; } };
+    if (host.dev) globalThis.__tg = { get M() { return M; }, get save() { return save; }, get view() { return view; }, map() { layer.innerHTML = ''; M = null; save.match = null; showMap(); } };
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => relayout()) : null;
     ro?.observe(viewEl);

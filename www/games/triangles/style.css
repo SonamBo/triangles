@@ -37,9 +37,11 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 4px 14px 14px;
+  padding: 4px 14px calc(14px + var(--safe-bottom, 0px));
   gap: 10px;
   box-sizing: border-box;
+  background-size: cover;
+  background-position: center bottom;
 }
 
 /* ---------------------------------------------------------------- *
@@ -129,8 +131,6 @@
 .tg-path-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .tg-path-line .road { fill: none; stroke: #f6efdc; stroke-width: 28px; stroke-linecap: round; }
 .tg-path-line .dash { fill: none; stroke: #d2c29e; stroke-width: 4px; stroke-linecap: round; stroke-dasharray: 2 12; }
-.tg-path.rain { background: radial-gradient(circle at 20% 30%, #b9d3e9 0 22px, transparent 23px), radial-gradient(circle at 80% 70%, #b9d3e9 0 18px, transparent 19px); }
-.tg-path.night { }
 
 .tg-node {
   position: absolute; transform: translate(-50%, -50%); width: 54px; height: 54px; border-radius: 999px; border: 4px solid #c9bb98; background: #f6efdc;
@@ -154,7 +154,7 @@
 .tg-node.nope { animation: tg-nope 300ms ease; }
 .tg-here { position: absolute; transform: translateX(-50%); width: 52px; height: 52px; border-radius: 16px; background: #fff; border: 3px solid var(--tg-ink); display: flex; align-items: center; justify-content: center; pointer-events: none; animation: tg-bob 1.6s ease-in-out infinite; }
 .tg-here img { width: 44px; height: 44px; object-fit: contain; }
-.tg-map-foot { padding: 12px 14px 4px; background: var(--tg-cream); border-top: 3px solid var(--tg-ink); border-radius: 24px 24px 0 0; position: relative; z-index: 2; }
+.tg-map-foot { padding: 12px 14px calc(16px + var(--safe-bottom, 0px)); background: var(--tg-cream); border-top: 3px solid var(--tg-ink); border-radius: 24px 24px 0 0; position: relative; z-index: 2; }
 
 @keyframes tg-breathe { 50% { transform: translate(-50%, -50%) scale(1.06); } }
 @keyframes tg-bob { 50% { transform: translateX(-50%) translateY(-5px); } }
@@ -307,7 +307,8 @@
 
 .tg-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
 .tg-card-wrap {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  padding: 16px 16px calc(16px + var(--safe-bottom, 0px));
   background: rgba(40, 30, 22, 0); pointer-events: auto; transition: background 200ms;
 }
 .tg-card-wrap.in { background: rgba(40, 30, 22, .45); }
@@ -378,7 +379,7 @@
 
 /* Short screens: tighten the match so the yard keeps its room. */
 @media (max-height: 640px) {
-  .tg-view { gap: 6px; padding-bottom: 8px; }
+  .tg-view { gap: 6px; padding-bottom: calc(8px + var(--safe-bottom, 0px)); }
   .tg-coach { min-height: 40px; padding: 4px 10px 4px 4px; }
   .tg-coach p { font-size: 13px; }
   .tg-act { min-height: 44px; }
@@ -389,3 +390,37 @@
 @media (prefers-reduced-motion: reduce) {
   .tg-root *, .tg-root *::before { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
+
+/* ---------------------------------------------------------------- *
+ * Zones: each street has its own ground, on the map and in the match.
+ * A painted background (img/bg-<zone>.jpg, see art.js) goes on top of
+ * this when there is one.
+ * ---------------------------------------------------------------- */
+
+.tg-map.zone-backyard { background-color: #dfeab9; }
+.tg-map.zone-park { background-color: #cfe4a2; }
+.tg-map.zone-rain { background-color: #cddbe5; }
+.tg-map.zone-fence { background-color: #ecdcb4; }
+.tg-map.zone-night { background-color: #2f3858; }
+.tg-match.zone-backyard { background-color: #fbf6ec; }
+.tg-match.zone-park { background-color: #f0f6e2; }
+.tg-match.zone-rain { background-color: #ecf2f7; }
+.tg-match.zone-fence { background-color: #f8efdc; }
+.tg-match.zone-night { background-color: #262d47; }
+.tg-match.zone-night .tg-left, .tg-match.zone-night .tg-left b { color: #e8ecf6; }
+.tg-map.zone-night .tg-next-zone { background: rgba(255, 255, 255, .85); color: var(--tg-ink); }
+.tg-map.zone-night .tg-path-line .road { stroke: #4a5579; }
+.tg-map.zone-night .tg-path-line .dash { stroke: #8792b5; }
+.tg-map.zone-night .tg-node.locked { background: #3d4768; border-color: #5c6890; color: #c9d0e6; }
+
+.tg-scenery { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tg-scenery .fly { animation: tg-fly 3s ease-in-out infinite alternate; }
+.tg-scenery .fly:nth-of-type(2n) { animation-duration: 4.2s; }
+.tg-scenery .drop { animation: tg-rain 1.4s linear infinite; }
+@keyframes tg-fly { to { transform: translate(6px, -8px); opacity: .5; } }
+@keyframes tg-rain { from { transform: translateY(-10px); opacity: 0; } 30% { opacity: .8; } to { transform: translateY(26px); opacity: 0; } }
+
+/* the rival's last line stays marked until you answer it */
+.tg-svg .ln.last { stroke-width: 6; }
+.tg-svg .ln.last.cat { stroke: var(--tg-cat-deep); }
+.tg-svg .ln.last.dog { stroke: var(--tg-dog-deep); }
