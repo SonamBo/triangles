@@ -70,6 +70,12 @@ const square = () => new Board({ dots: [P(50, 50), P(250, 50), P(250, 250), P(50
   ok(b.treats[0].taken === -2 && b.scores[1] === 0, 'treat back after undo');
 }
 {
+  // a treat exactly on a line goes to the first triangle that closes around it
+  const b = new Board({ dots: [P(20, 300), P(300, 300), P(160, 20), P(160, 340)], treats: [{ x: 160, y: 300 }] });
+  b.play(0, 1, 0); b.play(1, 2, 1);
+  ok(b.gain(0, 2) === 3, 'a treat on the edge still counts');
+}
+{
   // puddles
   const b = new Board({ dots: [P(20, 150), P(300, 150), P(160, 20)], puddles: [{ x: 160, y: 150, r: 25 }] });
   ok(!b.isLegal(0, 1) && b.isLegal(0, 2), 'a puddle blocks the line through it');

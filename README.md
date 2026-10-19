@@ -1,24 +1,46 @@
-# Game starter
+# Triangles – Cats vs Dogs
 
-An Android game shell with everything except the game: Firebase analytics and
-crash reports, AdMob (rewarded ads and timed Ad breaks, with Google's consent
-message), a coin economy, collectible cats with perks, a Shop, daily tasks, a
-Rewards Box, Bell Quest (a streak event), reminders, a first-time tutorial
-system, saves, and a GitHub Actions pipeline that builds a Play-ready bundle.
+Draw lines between dots. Close a triangle to claim it. Most triangles wins the yard.
 
-The game is one folder, `www/games/<id>/`. A tiny placeholder, Coin Catch
-(`www/games/template/`), is installed so it all runs from day one.
+You play **Team Cat** or **Team Dog** against a rival from the other team, through a neighbourhood of zones. Built on the Cash Paws shell (coins, cats and perks, daily tasks, Rewards Box, Bell Quest, ads, analytics, the Android app and CI). The game is `www/games/triangles/`.
 
-- **Setting up your app** (accounts, keys, Play): `SETUP.md`
-- **Writing your game** (and instructions for Claude): `CLAUDE.md`, then
-  `docs/GAME-MODULE.md`
-- **Releasing**: `RELEASING.md`
+## The game
+
+| File | What's in it |
+|---|---|
+| `board.js` | The rules: legal lines (no crossing, no touching dots, no puddles), empty-triangle detection, treats, fences, fireflies, undo |
+| `ai.js` | Rival styles from `sleepy` (never scores: the first match can't be lost) through `easy`, `mild`, `steady`, `firm`, `normal`, `smart` and `boss` (looks one reply ahead), plus hints |
+| `levels.js` | Zones, rivals, difficulty per level, yard generation, puzzles |
+| `sounds.js` | The game's synthesized effects: meow, woof, line, claim… |
+| `index.js` / `style.css` | Screens: team pick, map, match, cards |
+
+### Levelling
+
+| Levels | Zone | Twist |
+|---|---|---|
+| 1–10 | The Backyard | The basics. Level 1 is a guided tutorial against a sleepy pup who never scores |
+| 11–20 | The Park | Treat triangles score 3 |
+| 21–30 | Rainy Lane | Puddles no line can cross |
+| 31–40 | Fence Row | Some lines are drawn before the match |
+| 41–50 | Night Garden | Fireflies light up new dots mid-match |
+| 51+ | The same streets again ("II", "III"…) | Every twist mixed in, sharper rivals |
+
+Every 5th level is a puzzle (score 2 with one line / three safe lines / comeback), every 10th a boss. Levels are generated from their number, so they're the same for everyone. Yards are chosen with an odd number of triangles, so most matches can't tie.
+
+Early levels are tuned so new players win: the rival in levels 2–9 stops taking triangles once it is a few points ahead.
+
+### Checks
 
 ```bash
-node serve.js 8080       # then open http://localhost:8080/?dev=1
-node test/preflight.js   # checks before every push
-node test/run.js         # rule tests
+node test/games/triangles/rules.js            # rules, rivals, every level 1–70 builds and plays out
+node test/games/triangles/sim.js 40 60         # balance: win rates per level for three player strengths
+node serve.js 8080 &
+node test/games/triangles/play.mjs             # tutorial win, map, first puzzle, in a phone-sized browser
+node test/games/triangles/sounds.mjs           # renders the game's sounds; fails on silence or clipping
 ```
 
-Shell updates: `git pull upstream main` (see `SETUP.md`). `SHELL-VERSION` says
-which release you have.
+Play in a browser: `node serve.js 8080`, then open http://localhost:8080/?dev=1 (the dev panel can win, lose, skip levels and swap teams).
+
+## Setting up the app
+
+`SETUP.md` covers your repo, Firebase, AdMob, signing and Play. The app's identity is in `www/app.config.js`; `applicationId` is `com.pixelartgames.triangles`. Change it before the first upload if you want a different one: it's permanent after that.

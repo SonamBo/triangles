@@ -1,0 +1,10 @@
+{
+  "_about": "How Triangles plays on the web (platforms/crazygames). The Android app ignores it.",
+  "keys": [],
+  "keysHelp": "Click a dot and drag to another to draw a line. P pause.",
+  "css": "web.css",
+  "mustBeVisible": [".tg-view"],
+  "overrides": [
+    { "why": "PC players click", "file": "games/triangles/index.js", "find": "Drag from one dot to another", "replace": "Drag from one dot to another (or click one, then the other)" }
+  ]
+}

@@ -1,0 +1,5 @@
+/* Triangles on PC (web build only). */
+@media (hover: hover) and (pointer: fine) {
+  .tg-svg { cursor: crosshair; }
+  .tg-act:hover:not(:disabled), .tg-btn:hover, .tg-node.now:hover { filter: brightness(1.04); }
+}

@@ -47,6 +47,13 @@ export function inTriangle(p, a, b, c) {
   return !(neg && pos) && d1 !== 0 && d2 !== 0 && d3 !== 0;
 }
 
+/** Inside a-b-c or on its edge: a treat on a line still belongs to the triangle that closes first. */
+export function inOrOnTriangle(p, a, b, c) {
+  const e = 1e-6;
+  const d1 = cross(a, b, p), d2 = cross(b, c, p), d3 = cross(c, a, p);
+  return !((d1 < -e || d2 < -e || d3 < -e) && (d1 > e || d2 > e || d3 > e));
+}
+
 export const centroid = (a, b, c) => ({ x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 });
 export const area = (a, b, c) => Math.abs(cross(a, b, c)) / 2;
 

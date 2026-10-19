@@ -1,4 +1,4 @@
-// ci-args: 1 12
+// ci-args: 20 6
 /**
  * Balance: bots of three strengths play every level against its rival and we
  * print how often each wins. A "steady" bot stands in for a new player, "normal"
@@ -52,7 +52,7 @@ for (let level = 1; level <= last; level++) {
     const pct = Math.round((100 * w) / games);
     cells.push(`${me} ${String(pct).padStart(3)}%`);
     if (level === 1 && pct < 100) { problems++; console.error(`level 1 lost by a ${me} bot`); }
-    if (level >= 2 && level <= 4 && me === 'steady' && pct < 70) { problems++; console.error(`level ${level}: a new player wins only ${pct}%`); }
+    if (games >= 10 && level >= 2 && level <= 4 && me === 'steady' && pct < 70) { problems++; console.error(`level ${level}: a new player wins only ${pct}%`); }
   }
   rows.push(`${String(level).padStart(3)}  ${spec.zone.name.padEnd(14)} ${spec.kind.padEnd(6)} ${spec.style.padEnd(7)} dots ${String(spec.dots).padStart(2)}  ${cells.join('  ')}  ~${Math.round(lines / (games * PLAYERS.length))} lines`);
 }

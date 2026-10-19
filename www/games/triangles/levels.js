@@ -31,7 +31,7 @@ export function face(id, mood = 'happy') {
   if (id === 'pup') return `img/dog-pup-${mood === 'think' ? 'happy' : mood}.svg`;
   if (id === 'kitten') return mood === 'sleep' ? 'img/cat-biscuit-slump.png' : 'img/cat-biscuit-face.png';
   if (teamOf(id) === 'dog') return `img/dog-${id}-${mood === 'sleep' ? 'think' : mood}.svg`;
-  return mood === 'sad' ? `img/cat-${id}-slump.png` : `img/cat-${id}-face.png`;
+  return mood === 'sleep' ? `img/cat-${id}-slump.png` : `img/cat-${id}-face.png`;
 }
 export const pose = (id, kind) => (teamOf(id) === 'cat' ? `img/cat-${id === 'kitten' ? 'biscuit' : id}-${kind}.png` : face(id, kind === 'cheer' ? 'happy' : 'sad'));
 

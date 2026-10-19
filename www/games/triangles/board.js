@@ -12,7 +12,7 @@
  * rival. Fence lines (drawn before the match) belong to nobody.
  */
 
-import { segmentsMeet, distToSegment, inTriangle, centroid, DOT_CLEAR } from './geom.js';
+import { segmentsMeet, distToSegment, inTriangle, inOrOnTriangle, centroid, DOT_CLEAR } from './geom.js';
 
 export const FENCE = -1;
 const key = (i, j) => (i < j ? i * 1000 + j : j * 1000 + i);
@@ -74,7 +74,7 @@ export class Board {
   /** The treat a-b-c covers, or a zero-value stand-in. */
   treatAt(a, b, c) {
     const A = this.dots[a], B = this.dots[b], C = this.dots[c];
-    for (const t of this.treats) if (t.taken === -2 && inTriangle(t, A, B, C)) return t;
+    for (const t of this.treats) if (t.taken === -2 && inOrOnTriangle(t, A, B, C)) return t;
     return { value: 0, i: -1 };
   }
 
