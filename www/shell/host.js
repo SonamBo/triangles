@@ -56,7 +56,19 @@ export function createHost({ game, shell, wallet, header, ads, onProgress, onSta
     /** Between one level's celebration and the next level: the shell may show event progress. */
     levelBreak: () => Promise.resolve(events.levelBreak?.()),
 
-    celebrate: (o) => { sound?.play('celebrate'); return celebrate(o); },
+    // `share: true` adds a small Share button where sharing works (the level-up card).
+    // `juicy: true` is the big level-end card: headline, stars, fireworks, confetti,
+    // with sound and vibration in time (the stars chime, the fireworks boom).
+    celebrate: (o) => {
+      const onShare = o?.share ? events.shareFrom?.('levelup') : null;
+      if (!o?.juicy) { sound?.play('celebrate'); return celebrate({ ...o, onShare }); }
+      const onBeat = (kind, i) => {
+        if (kind === 'open') { sound?.play('fanfare'); haptic([0, 22, 40, 22]); }
+        else if (kind === 'star') { sound?.play(`star${i}`); haptic(9); }
+        else if (kind === 'boom') { sound?.play('boom'); haptic(26); }
+      };
+      return celebrate({ ...o, onShare, onBeat });
+    },
     setback: (o) => { sound?.play('setback'); return setback(o); },
     // A sound effect: tap, lift, drop, bank, levelup, flow, sort, undo, error,
     // coin, open, unlock (see shell/sound.js). Silent when the player turned sound off.
@@ -67,6 +79,19 @@ export function createHost({ game, shell, wallet, header, ads, onProgress, onSta
     /** A natural break, such as a finished level. Awaitable; nothing is tied to it now. */
     moment: (kind) => ads.moment(kind),
     rewarded: ads.rewarded,
+
+    /*
+     * Short of coins: await host.shortOf({ price, what: 'a Sort', ad: 'rescue-sort',
+     * adLabel: 'Watch an ad · free Sort' }). The shell offers coin packs first,
+     * then the rewarded ad, and resolves 'coins' (enough now), 'ad' (watched)
+     * or null. host.shortHelps(ad) says whether it has anything to offer, so a
+     * button can stay tappable when the player is short.
+     */
+    shortOf: (o) => events.shortOf?.(o) ?? Promise.resolve(null),
+    shortHelps: (ad) => !!events.shortHelps?.(ad),
+    /** Coin packs for real money: whether this build sells them, and the Shop's coin section. */
+    coinsForSale: () => !!events.coinsForSale?.(),
+    openCoins: (from) => events.openCoins?.(from) ?? Promise.resolve(),
 
     art: {
       cat: (pose, width, cls = '') => cat(pose, width, cls),

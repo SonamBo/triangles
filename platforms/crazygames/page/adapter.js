@@ -25,7 +25,7 @@
   const LEVEL_RE = new RegExp((window.__WEB_GAME && window.__WEB_GAME.levelPattern) || '(\\d+)');
   const SAVE_KEY = 'cashpaws.save.v2';
   const MIDGAME_GAP_MS = 180000;        // CrazyGames: at most one midgame ad every 3 minutes
-  const AFTER_LEVEL_UP_MS = 20000;      // an Ad break may only start this soon after a level-up
+  const AFTER_LEVEL_UP_MS = 120000;     // an Ad break only near a level-up (the shell asks at the level's end, after its card)
   const REWARDED_RETRY_MS = 60000;      // after an unfilled rewarded ad, hide the offer this long
 
   let sdk = null;
@@ -110,6 +110,11 @@
     // The shell builds the lobby asynchronously, so wait for its Play button.
     const started = Date.now();
     (function enter() {
+      // A new player opens on the board already (1.17.0): loading is done.
+      if (app() && app().classList.contains('on-game')) {
+        if (sdk) { safe(() => sdk.game.loadingStop()); note('loadingStop'); }
+        return;
+      }
       const play = app() && app().querySelector('[data-play]');
       if (play && app().classList.contains('on-lobby')) {
         play.click();

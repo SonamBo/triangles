@@ -11,16 +11,22 @@
 import { emptyDaily } from './daily.js';
 import { emptyBox } from './rewards.js';
 import { emptyQuest } from './quest.js';
+import { emptyGift } from './gift.js';
 
 const KEY = 'cashpaws.save.v2';
 const LEGACY_KEY = 'cashpaws.save.v1';
 
 export const START_COINS = 50;
 
+/** A random id for this install. */
+function newDevice() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
 export function freshShell() {
   return {
     coins: START_COINS,
-    stats: { coinsEarned: 0, bestLevel: 1, daysPlayed: 0, lastDay: null },
+    stats: { coinsEarned: 0, bestLevel: 1, daysPlayed: 0, lastDay: null, firstDay: null },
     cats: { owned: ['patch'], worn: 'patch' },
     cosmetics: {},        // [gameId]: { owned: [], active }
     gameStats: {},        // [gameId]: { banks: 12, ... }
@@ -31,6 +37,10 @@ export function freshShell() {
     flags: {},            // [gameId]: { ftue: true, ... } via host.flag()
     reminders: { on: true, asked: false },   // local notifications; Android still asks
     audio: { sfx: true, music: true },       // Settings switches (1.15.0)
+    iap: { granted: [], purchases: 0, coins: 0 },   // coin packs: tokens already paid out (1.16.0)
+    gift: emptyGift(),    // tomorrow's gift, offered once after level 3 (1.17.0)
+    device: newDevice(),  // this install, to tell a cloud save from elsewhere (1.18.0)
+    review: { asked: [] },  // rating milestones already asked (1.18.0)
   };
 }
 
@@ -71,6 +81,15 @@ function normalise(rec) {
   shell.flags = { ...(shell.flags || {}) };                  // absent before 1.9.0
   shell.reminders = { ...base.reminders, ...(shell.reminders || {}) };   // absent before 1.10.0
   shell.audio = { ...base.audio, ...(shell.audio || {}) };               // absent before 1.15.0
+  shell.iap = { ...base.iap, ...(shell.iap || {}) };                     // absent before 1.16.0
+  shell.gift = { ...base.gift, ...(shell.gift || {}) };                   // absent before 1.17.0
+  // The first day played, for the first days without ad breaks (1.17.0). Older
+  // saves never recorded it: anyone who has played on two or more days counts
+  // as long past it; a one-day player started on their last day.
+  if (!shell.stats.firstDay && shell.stats.lastDay) {
+    shell.stats.firstDay = shell.stats.daysPlayed >= 2 ? '2000-01-01' : shell.stats.lastDay;
+  }
+  shell.review = { ...base.review, ...(shell.review || {}) };             // absent before 1.18.0
   return { v: 2, shell, games: rec.games || {} };
 }
 

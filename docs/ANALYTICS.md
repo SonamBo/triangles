@@ -36,12 +36,13 @@ Firebase collects some events itself: `first_open`, `session_start`,
 
 | Event | Parameters | When |
 |---|---|---|
-| `app_ready` | coins, best_level, quest | The app has loaded. |
+| `app_boot` | load_ms (since the WebView started the page), new_player | The page's first event, before the game loads. Installs with `first_open` but no `app_boot` never got the page running. |
+| `app_ready` | coins, best_level, quest, load_ms, start_screen (`game` for a player still on level 1, else `lobby`) | The app has loaded. |
 | `screen_view` | screen_name: `lobby`, `game`, `daily`, `cats`, `progress`, `shop` | Each screen or tab. |
 | `level_up` | level (just reached), kind (`normal`/`hard`/`breather`), modifiers (`locked`, `frozen`, `lucky`, comma-separated, or `none`), beat_hard, coins, moves, seconds, quest_step | A level is beaten. `moves` and `seconds` are for the level just beaten; `seconds` counts only time on the board. |
 | `level_lost` | level, to, modifiers, moves, seconds | The player drops a level. |
-| `board_stuck` | level, kind, can_sort, free, coins, price, ad_offer | The stuck card appears. |
-| `stuck_choice` | level, choice: `sort`/`free-sort`/`drop` | The player's answer to the stuck card. |
+| `board_stuck` | level, kind, can_sort, free, coins, price, ad_offer, buy_offer | The stuck card appears. |
+| `stuck_choice` | level, choice: `sort`/`free-sort`/`drop` (a Sort after buying coins counts as `sort`) | The player's answer to the stuck card. |
 | `sort_used` | level, how: `paid`/`free`/`ad`, where: `button`/`stuck`, price | Each Sort. |
 | `undo_used` | level | Each Undo. |
 
@@ -50,7 +51,7 @@ built-in reports.
 
 | Event | Parameters |
 |---|---|
-| `earn_virtual_currency` | virtual_currency_name `coins`, value, source (`levelup`, `daily`, `box`, `quest`, `safety-net`, `bank`), balance |
+| `earn_virtual_currency` | virtual_currency_name `coins`, value, source (`levelup`, `daily`, `box`, `quest`, `gift`, `safety-net`, `bank`, `purchase`), balance |
 | `spend_virtual_currency` | virtual_currency_name `coins`, value, item_name (`sort`, `undo`, `cat`, `cosmetic`), balance |
 
 Banks happen dozens of times per level, so they're summed and sent as one
@@ -73,10 +74,12 @@ to the background.
 | `do_not_sell` | on |
 | `ftue_step` | step: `move`, `stack`, `bank` (each beat of the first-time tutorial as it starts) |
 | `ftue_complete` | (the player tapped Got it on the progress-bar spotlight) |
-| `reminders_offer` | reason (`box`/`quest`), yes (the in-game ask) |
-| `reminders_permission` | granted (Android's own prompt) |
+| `gift_offer` | level, coins, remind (whether "Remind me tomorrow" was offered): tomorrow's gift, once after level 3 |
+| `gift_claim` | coins, days (local days since the offer; 1 = next day), from_reminder |
+| `reminders_offer` | reason (`gift`/`box`/`quest`), yes (the in-game ask, or the gift card's buttons) |
+| `reminders_permission` | granted (Android's own prompt), reason |
 | `reminders_toggle` | on (the Settings switch) |
-| `reminder_open` | id (`box`/`quest`): the app was opened from a reminder |
+| `reminder_open` | id (`gift`/`box`/`quest`): the app was opened from a reminder |
 | `progress_erased` | best_level |
 
 **Ads**
@@ -85,10 +88,37 @@ to the background.
 |---|---|
 | `ad_rewarded_start` | placement (`rescue-sort`, `box-early`) |
 | `ad_rewarded_result` | placement, earned |
-| `ad_interstitial_show` | placement `ad-break`, level, play_seconds (when the Ad break screen hands over to the ad) |
+| `ad_interstitial_show` | placement `ad-break`, level (the level just reached; when the Ad break screen hands over to the ad, at a level's end) |
 | `ad_load_failed` | format (`rewarded`/`interstitial`), code (AdMob's error code: 3 = no fill, 1 = bad request/ID, 2 = network, 0 = internal), message. Once per format and code per session. |
 | `ad_interstitial_result` | placement, shown (whether an ad actually played) |
 | `ad_impression` | Logged by the AdMob SDK itself once AdMob is linked to Firebase (AdMob → Settings → Linked services): ad revenue per impression. This drives Firebase's ad revenue reports. |
+
+**Purchases** (coin packs, since 1.16.0; only in builds with `coinPacks` in
+`www/app.config.js`)
+
+| Event | Parameters |
+|---|---|
+| `iap_view` | from: `tab` (the Shop tab), `pill` (the + on the coin counter), `short` ("Get coins" when something cost too much). Only once Play has returned prices. |
+| `iap_start` | product, coins (the player tapped a price) |
+| `iap_result` | product, status: `purchased`, `pending`, `cancelled`, `owned` (an earlier purchase being finished), `error` |
+| `coins_short` | what (`a Sort`, a cat or chip set), need, buy (coin packs offered), ad (an ad offered): the "Not enough coins" card. Coin packs come first, then the ad. |
+| `iap_granted` | product, coins, quantity, order (`yes`/`no`): coins actually added, once per purchase |
+| `in_app_purchase` | Logged by Firebase itself for every Google Play purchase, with the price and currency. **Revenue reports come from this one**; the shell sends no revenue of its own, so nothing is counted twice. |
+
+The funnel is `iap_view` → `iap_start` → `iap_result` → `iap_granted`.
+Bought coins also send `earn_virtual_currency` with source `purchase`; they
+don't count towards `coinsEarned`, which reveals cats.
+
+**Cloud save, share, rating** (since 1.18.0)
+
+| Event | Parameters |
+|---|---|
+| `cloud_signed_in` | (signed in to Play Games, automatically or from Settings) |
+| `cloud_restore_offer` | level (the cloud save's), local_level ("Continue from level N?" shown) |
+| `cloud_restore` | restored (true: took the cloud save; false: started fresh) |
+| `share_open` | from: `lobby`, `settings`, `levelup` (the share sheet opened; whether they sent it is unknown) |
+| `review_request` | at: 3, 11 or 26 (the level just reached: after clearing 2, 10, 25) |
+| `review_done` | at, asked (Google's sheet finished; it never says whether it showed or they rated) |
 
 **User properties** are attached to every event: `game`, `best_level`,
 `cat_worn`, `cats_owned`, `days_played` and `quest_wins`.
@@ -97,12 +127,14 @@ to the background.
 
 1. **Register the custom parameters** you want in reports: Analytics → Custom
    definitions → Create custom dimension (event scope). Start with `level`,
-   `kind`, `placement`, `source`, `item_name`, `how`, `choice` and `step`, plus
-   the metrics `seconds` and `moves`. Unregistered parameters are still
+   `kind`, `placement`, `source`, `item_name`, `how`, `choice`, `step` and
+   `reason`, plus the metrics `seconds`, `moves` and `load_ms`.
+   (Cash Paws has `level`, `step`, `choice` and `reason` registered since
+   24 Oct 2026; data from before a dimension is registered stays unbroken.) Unregistered parameters are still
    recorded, but reports can't break down by them. The free tier allows 50
    dimensions and 50 metrics.
-2. **Register user properties** the same way: `best_level`, `cat_worn` and
-   `quest_wins`.
+2. **Register user properties** the same way: `best_level`, `days_played`,
+   `cat_worn` and `quest_wins`.
 3. **Mark key events:** `level_up`, `quest_win` and `ad_rewarded_result`.
 4. **Data retention:** Admin → Data settings → Data retention → 14 months. The
    default is 2 months, which is too short to compare seasons. Match the

@@ -15,11 +15,14 @@ p.on('pageerror', (e) => errs.push(e.message));
 p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
 const shot = async (name) => { if (SHOTS) await p.screenshot({ path: `${SHOTS}/meta-${name}.png` }); };
 
-await p.goto('http://localhost:8080/?dev=1');
+await p.goto('http://localhost:8080/?dev=1&lobby=1');
 await p.evaluate(() => localStorage.clear());
 await p.reload(); await p.waitForTimeout(800);
 await p.click('[data-play]'); await p.waitForTimeout(400);
 await p.click('[data-team="cat"]'); await p.waitForTimeout(600);
+// The shell's day-two gift card (1.17.0) would sit over the map after a level
+// break; this test is about the game's own cards, so the gift is already taken.
+await p.evaluate(() => { shell.gift.status = 'claimed'; });
 
 const center = async (i) => { const bb = await p.locator(`.L-dots [data-i="${i}"] .dot-core`).boundingBox(); return { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }; };
 const drag = async (i, j) => { const a = await center(i), c = await center(j); await p.mouse.move(a.x, a.y); await p.mouse.down(); await p.mouse.move((a.x + c.x) / 2, (a.y + c.y) / 2, { steps: 3 }); await p.mouse.move(c.x, c.y, { steps: 3 }); await p.mouse.up(); };

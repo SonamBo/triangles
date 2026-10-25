@@ -10,7 +10,10 @@ import game from '../games/active.js';
 import APP from '../app.config.js';
 import * as store from './save.js';
 import { Wallet } from './wallet.js';
-import { createAds, INTERSTITIAL_EVERY_MS, INTERSTITIAL_FROM_LEVEL } from './ads.js';
+import { createAds, INTERSTITIAL_FROM_LEVEL, AFTER_REWARDED_MS } from './ads.js';
+import { createBilling } from './billing.js';
+import { createCloud } from './cloud.js';
+import { createSocial } from './social.js';
 import { createAnalytics } from './analytics.js';
 import { createCoach } from './coach.js';
 import { createNotify, boxReminder, questReminder } from './notify.js';
@@ -20,16 +23,19 @@ import { Header } from './header.js';
 import { LobbyView } from './lobby.js';
 import { Panels } from './tabs.js';
 import { CATS, catById, unlockProgress, perkIn } from './cats.js';
-import { setWornCat, icons } from './art.js';
+import { setWornCat, icons, coinIcon } from './art.js';
 import {
-  mountOverlays, anyCardOpen, confirm, ask, pauseMenu, settings, toast, boxCard, celebrate, adBreak,
+  mountOverlays, anyCardOpen, confirm, ask, choose, pauseMenu, settings, toast, boxCard, giftCard, celebrate, adBreak,
 } from './overlays.js';
 import { localDay, ensureDay, claimable, claimTask, claimBonus, newlyDone } from './daily.js';
 import { isReady, msUntil, formatWait, openBox, adOpensLeft, DEFAULT_VALUE } from './rewards.js';
 import * as Q from './quest.js';
+import * as G from './gift.js';
 import { bell, introCard, findingCard, pathCard, wonCard, overCard } from './questui.js';
 
 const DEV = new URLSearchParams(location.search).has('dev');
+// Browser tests only: open on the lobby even for a new player (the pre-1.17.0 opening).
+const FORCE_LOBBY = new URLSearchParams(location.search).has('lobby');
 const APP_VERSION = APP.versionName;     // from www/app.config.js
 document.title = APP.name;
 
@@ -38,20 +44,28 @@ game.path = `games/${game.id}/`;
 
 let record;           // the whole save
 let shell;            // record.shell, the part the shell owns
-let wallet, header, lobby, panels, instance, ads, analytics, notify, sound;
+let wallet, header, lobby, panels, instance, ads, analytics, notify, sound, billing, cloud, social;
 let screen = 'lobby';
 let currentLevel = 0;      // the installed game's level, from host.progress()
 let adBreakOn = false;
+let launchedFrom = '';     // the reminder that opened the app, if any
 
 /* ---------------------------------------------------------------- *
  * Save
  * ---------------------------------------------------------------- */
 
-function save() {
-  if (!instance) return;
+/** The whole save, brought up to date. */
+function current() {
   shell.coins = wallet.coins;
   record.games[game.id] = { v: game.saveVersion, data: instance.serialize() };
-  store.write(record);
+  return record;
+}
+
+let restoring = false;      // a cloud save was just written: nothing may overwrite it before the reload
+function save() {
+  if (!instance || restoring) return;
+  store.write(current());
+  cloud?.saved();             // and to Play Games, at most once a minute
 }
 
 /** One count per calendar day the app is opened, for daily tasks and stats. */
@@ -60,6 +74,7 @@ function markDay() {
   if (shell.stats.lastDay === today) return;
   // A clock wound backwards does not earn a new day.
   if (shell.stats.lastDay && today < shell.stats.lastDay) return;
+  shell.stats.firstDay ||= today;
   shell.stats.lastDay = today;
   shell.stats.daysPlayed += 1;
 }
@@ -248,7 +263,9 @@ function autoQuest(reason) {
   if (reason === 'open' || Q.hasNews(q) || (q.status === 'offer' && !offeredThisSession)) openQuest();
 }
 
+let reachedLevel = 0;      // the level just reached, for the Ad break at the level's end
 function onLevelWon(info = {}) {
+  if (Number.isFinite(info.level)) reachedLevel = info.level;
   flushCoins();
   track('level_up', { ...info, quest_step: Q.isActive(shell.quest) ? shell.quest.step + 1 : undefined });
   if (!questOn()) return;
@@ -262,11 +279,85 @@ function onLevelWon(info = {}) {
 }
 
 /**
- * The game has finished celebrating a level and is about to start the next:
- * show the quest's progress here, in the game, rather than waiting for the
- * lobby. A win is claimed on the spot.
+ * The game has finished celebrating a level and is about to start the next.
+ * Bell Quest's progress first, then, past level 10, an Ad break.
  */
 async function onLevelBreak() {
+  await questBreak();
+  const level = reachedLevel || currentLevel;
+  if (screen !== 'game' || adBreakOn) return;
+  if (await giftBreak(level)) return;                // no ad straight after the gift card
+  // The rating sheet after levels 2, 10 and 25; that break has no ad.
+  const at = social.reviewDue(level);
+  if (at) { await social.review(at); return; }
+  if (ads.interstitialDue(level, adGate())) await runAdBreak(level);
+}
+
+/* ---------------------------------------------------------------- *
+ * Tomorrow's gift (1.17.0) — the rules live in gift.js
+ *
+ * Once a new player beats level 3, a locked gift that opens tomorrow, with
+ * the reminder offer right there. Opened on arriving in the lobby on any
+ * later day, before any Bell Quest card.
+ * ---------------------------------------------------------------- */
+
+let giftOpen = false;
+
+/** At the break between levels: offer the gift, once. True if a card showed. */
+async function giftBreak(level) {
+  if (giftOpen || !G.shouldOffer(shell.gift, level)) return false;
+  giftOpen = true;
+  try {
+    G.offer(shell.gift, { now: Date.now(), value: questValue() });
+    save();
+    const remind = canAskReminders();
+    track('gift_offer', { level, coins: shell.gift.coins, remind });
+    const pick = await giftCard({ ready: false, coins: shell.gift.coins, remind });
+    if (pick === 'remind') await requestReminders('gift');
+    else if (remind) {
+      // "I'll remember": the system prompt is never shown, and this counts as asked.
+      shell.reminders.asked = true;
+      track('reminders_offer', { reason: 'gift', yes: false });
+    }
+    refreshReminders();
+    save();
+    return true;
+  } finally {
+    giftOpen = false;
+  }
+}
+
+/** On arriving in the lobby: open a gift that's ready. True if it opened. */
+async function openGiftIfReady() {
+  const now = Date.now();
+  if (giftOpen || screen !== 'lobby' || panels.open || anyCardOpen() || !G.isReady(shell.gift, now)) return false;
+  giftOpen = true;
+  try {
+    await giftCard({ ready: true, coins: shell.gift.coins });
+    const days = G.daysSinceOffer(shell.gift, now);
+    const coins = G.claim(shell.gift, now);
+    if (!coins) return false;
+    track('gift_claim', { coins, days, from_reminder: launchedFrom === 'gift' });
+    wallet.earn(coins, 'gift');
+    save();
+    refreshReminders();
+    return true;
+  } finally {
+    giftOpen = false;
+  }
+}
+
+/** The lobby has just appeared: the gift first, then whatever Bell Quest needs. */
+async function lobbyArrive(reason) {
+  await openGiftIfReady();
+  autoQuest(reason);
+}
+
+/**
+ * Show the quest's progress here, in the game, rather than waiting for the
+ * lobby. A win is claimed on the spot.
+ */
+async function questBreak() {
   if (!questOn() || questOpen) return;
   const q = shell.quest;
   if (!Q.hasNews(q) || (q.status !== 'active' && q.status !== 'won')) return;
@@ -311,12 +402,12 @@ function levelLossWarning() {
   if (!questOn() || !Q.isActive(q)) return null;
   return {
     kicker: 'Bell Quest',
-    title: 'Give up your quest?',
-    line: `Dropping a level knocks you out of Bell Quest. `
+    title: 'Give up quest?',
+    line: `Dropping a level ends it. `
         + `${Q.catsLeft(q)} cats are still in, sharing ${q.grand.toLocaleString('en-US')} coins.`,
     stat: { label: `Step ${q.step + 1} of ${q.steps}`, value: `${Q.catsLeft(q)} cats` },
-    ok: 'Drop a level anyway',
-    cancel: 'Keep my quest',
+    ok: 'Drop anyway',
+    cancel: 'Keep quest',
     answer: (gaveUp) => track('quest_give_up_prompt', { step: q.step, gave_up: gaveUp }),
   };
 }
@@ -334,29 +425,18 @@ async function confirmLevelLoss() {
 setInterval(refreshQuest, 30000);
 
 /*
- * Interstitials. A clock counts actual play: the board on screen, nothing
- * over it, the app in the foreground. Past level 10, every 2.5 minutes of it,
- * an "Ad break" screen shows the cat for 2 seconds and then the ad plays.
- * It starts only between moves (never while a move or a bank is animating,
- * or a card or tutorial spotlight is up), and the game is paused throughout.
+ * Interstitials, at the end of a level (onLevelBreak above): past level 10,
+ * after the level-up celebration and any Bell Quest card, an "Ad break"
+ * screen shows the cat for 2 seconds and then the ad plays, before the next
+ * level starts. Never mid-board. The game is paused throughout.
  */
-const boardIdle = () => screen === 'game' && document.visibilityState === 'visible'
-  && !panels.open && !anyCardOpen() && !adBreakOn
-  && !document.body.classList.contains('busy') && !document.querySelector('.coach.blocking');
-
-setInterval(() => {
-  if (!ads || !boardIdle()) return;
-  ads.played(1000);
-  if (ads.interstitialDue(currentLevel)) runAdBreak();
-}, 1000);
-
-async function runAdBreak() {
+async function runAdBreak(level = currentLevel) {
   adBreakOn = true;
   instance.pause?.();
   try {
     const card = adBreak(2000);
     await card.done;
-    await ads.showInterstitial('ad-break', { level: currentLevel });
+    await ads.showInterstitial('ad-break', { level });
     await card.close();
   } finally {
     adBreakOn = false;
@@ -382,26 +462,36 @@ function refreshReminders() {
   questSync();                     // a quest may have unlocked or ended since
   notify.set('box', on ? boxReminder(shell.box, now) : null);
   notify.set('quest', on && questOn() ? questReminder(shell.quest, now, questValue()) : null);
+  notify.set('gift', on ? G.giftReminder(shell.gift, now) : null);
 }
 
+/** Can the game still ask, in its own words, before Android's prompt? */
+const canAskReminders = () => !!notify?.available && !shell.reminders.asked && notify.permission() === 'ask';
+
 async function offerReminders(reason) {
-  if (!notify?.available || shell.reminders.asked || notify.permission() !== 'ask') return;
+  if (!canAskReminders()) return;
   if (panels.open || anyCardOpen()) return;
   shell.reminders.asked = true;
   save();
   const yes = await ask({
     kicker: 'Reminders',
-    title: reason === 'box' ? 'Want a nudge when it refills?' : 'Want a nudge to keep going?',
-    line: 'We can tell you when your next Rewards Box is ready, and once a day, in the evening, '
-        + 'how your Bell Quest is going. Nothing else.',
-    ok: 'Yes, remind me',
+    title: reason === 'box' ? 'Remind you when it refills?' : 'Remind you to keep going?',
+    line: 'Your gift, the Rewards Box, and a daily Bell Quest update. Nothing else.',
+    ok: 'Remind me',
     cancel: 'Not now',
   });
   track('reminders_offer', { reason, yes });
   if (!yes) return;
+  await requestReminders(reason, { offered: true });
+}
+
+/** Android's own prompt. `offered`: the game's question was already tracked. */
+async function requestReminders(reason, { offered = false } = {}) {
+  shell.reminders.asked = true;
+  if (!offered) track('reminders_offer', { reason, yes: true });
   const granted = await notify.request();
   shell.reminders.on = granted;
-  track('reminders_permission', { granted });
+  track('reminders_permission', { granted, reason });
   save();
   refreshReminders();
 }
@@ -413,7 +503,7 @@ async function toggleReminders() {
     const perm = notify.permission();
     if (perm === 'ask') shell.reminders.on = await notify.request();
     else if (perm === 'granted') shell.reminders.on = true;
-    else toast(`Turn on notifications for ${APP.name} in your phone's settings first.`, 3600);
+    else toast(`Turn on notifications in phone settings`, 3600);
   }
   track('reminders_toggle', { on: remindersOn() });
   save();
@@ -435,7 +525,7 @@ const pendingCoins = new Map();          // 'earn:bank' -> total since last flus
 
 function onCoins(delta, reason) {
   if (!delta || !reason || reason === 'set') return;
-  if (delta > 0 && ['daily', 'box', 'quest', 'safety-net'].includes(reason)) sound?.play('coin');
+  if (delta > 0 && ['daily', 'box', 'quest', 'gift', 'safety-net', 'purchase'].includes(reason)) sound?.play('coin');
   const dir = delta > 0 ? 'earn' : 'spend';
   if ((game.analytics?.batch || []).includes(reason)) {
     const k = `${dir}:${reason}`;
@@ -472,6 +562,15 @@ function refreshUser() {
  * Boot
  * ---------------------------------------------------------------- */
 
+/** Milliseconds since the page started loading (the WebView's navigation start). */
+const msSinceStart = () => Math.round(globalThis.performance?.now?.() ?? 0);
+
+/** Still on level 1: the app opens on the board, not the lobby. */
+const isNewPlayer = () => (shell.stats.bestLevel || 1) <= 1;
+
+/** What the ad rules need to know about the player (ads.js interstitialDue). */
+const adGate = () => ({ firstDay: shell.stats.firstDay, today: localDay() });
+
 async function boot() {
   record = store.read();
   shell = record.shell;
@@ -487,6 +586,9 @@ async function boot() {
 
   wallet = new Wallet(shell.coins, shell.stats);
   analytics = createAnalytics({ dev: DEV });
+  // The first thing the page sends: installs that never reach app_ready
+  // either stop before here (the app or WebView) or after (the page's boot).
+  track('app_boot', { load_ms: msSinceStart(), new_player: isNewPlayer() });
   notify = createNotify({ dev: DEV });
   sound = createSound(shell.audio);
   // A soft tick on the shell's buttons (a game's own pieces make their own sounds).
@@ -494,7 +596,7 @@ async function boot() {
     if (e.target.closest('button, [data-pick], .menu-link, [data-tap]') && !e.target.closest('[data-game-root] .tube, [data-game-root] [data-col]')) sound.play('tap');
   }, true);
   lobby = new LobbyView(root.querySelector('[data-screen="lobby"]'));
-  header = new Header(root.querySelector('[data-header]'), { onPause });
+  header = new Header(root.querySelector('[data-header]'), { onPause, onCoins: openCoins });
   mountOverlays(root);
   panels = new Panels(root);
   panels.onBuy = buy;
@@ -513,6 +615,8 @@ async function boot() {
   lobby.on('settings', onSettings);
   lobby.on('box', onBox);
   lobby.on('quest', openQuest);
+  lobby.on('coins', openCoins);
+  lobby.on('share', () => social.share('lobby'));
 
   setWornCat(shell.cats.worn);
   await loadStyles(game);
@@ -543,6 +647,8 @@ async function boot() {
     events: {
       levelWon: onLevelWon, levelLost: onLevelLost, levelBreak: onLevelBreak,
       levelLossWarning, confirmLevelLoss, track,
+      shortOf, shortHelps, openCoins, coinsForSale: () => !!billing?.enabled,
+      shareFrom: (from) => (social?.canShare ? () => social.share(from) : null),
     },
   });
 
@@ -552,6 +658,19 @@ async function boot() {
 
   const slot = record.games[game.id];
   instance.start(slot ? slot.data : null, slot ? slot.v : null);
+
+  // Coin packs, after the game has started: a purchase is saved the moment it pays.
+  billing = createBilling({
+    packs: APP.coinPacks || [], dev: DEV, confirm, track, wallet, ledger: shell.iap, save,
+    notice: onBillingNotice,
+    onChange: () => { if (panels.open === 'shop') panels.show('shop', panelContext()); },
+  });
+
+  // Share and the rating sheet; then the Play Games cloud save, which may
+  // offer to restore progress from another install.
+  social = createSocial({ app: APP, ledger: shell.review, dev: DEV, toast, track, save });
+  lobby.showShare(social.canShare);
+  cloud = createCloud({ read: current, write: (rec) => { restoring = true; store.write(rec); }, ask, track });
   refreshDaily();
   refreshBox();
 
@@ -560,11 +679,16 @@ async function boot() {
   applySizeClasses();
   installBridge();
   refreshUser();
-  track('app_ready', { coins: wallet.coins, best_level: shell.stats.bestLevel, quest: shell.quest.status });
-  const from = notify.launchSource();
-  if (from) track('reminder_open', { id: from });
+  // New players go straight to their first board; the lobby comes once they've won a level.
+  const first = isNewPlayer() && !FORCE_LOBBY ? 'game' : 'lobby';
+  track('app_ready', {
+    coins: wallet.coins, best_level: shell.stats.bestLevel, quest: shell.quest.status,
+    load_ms: msSinceStart(), start_screen: first,
+  });
+  launchedFrom = notify.launchSource();
+  if (launchedFrom) track('reminder_open', { id: launchedFrom });
   refreshReminders();
-  showScreen('lobby', { opening: true });
+  showScreen(first, { opening: true });
   save();
 
   if (DEV) wireDev();
@@ -590,8 +714,8 @@ function showScreen(next, { opening = false } = {}) {
     refreshBox();
     refreshQuest();
     lobby.update({ coins: wallet.coins, summary: shell.summaries[game.id] });
-    if (opening) setTimeout(() => autoQuest('open'), 400);
-    else if (from === 'game') setTimeout(() => autoQuest('return'), 250);
+    if (opening) setTimeout(() => lobbyArrive('open'), 400);
+    else if (from === 'game') setTimeout(() => lobbyArrive('return'), 250);
   }
 }
 
@@ -611,10 +735,10 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('visibilitychange', () => {
   if (!instance) return;
-  if (document.visibilityState === 'hidden') { instance.pause?.(); flushCoins(); save(); refreshReminders(); }
+  if (document.visibilityState === 'hidden') { instance.pause?.(); flushCoins(); save(); cloud?.flush(); refreshReminders(); }
   else {
     refreshDaily(); refreshBox(); refreshQuest(); instance.resume?.();
-    if (screen === 'lobby') autoQuest('return');   // a quest may have ended while away
+    if (screen === 'lobby') lobbyArrive('return');   // a gift may be ready, or a quest ended, while away
   }
 });
 
@@ -622,20 +746,81 @@ document.addEventListener('visibilitychange', () => {
  * Tabs, menus, settings
  * ---------------------------------------------------------------- */
 
-const panelContext = () => ({ game, shell, instance, stats: gameStats() });
+const panelContext = () => ({ game, shell, instance, billing, stats: gameStats() });
 
+const panelClosed = [];      // openCoins() waiters
 function closePanel() {
   panels.hide();
+  panelClosed.splice(0).forEach((fn) => fn());
   if (screen === 'lobby') lobby.setNavTab('home');
   else instance.resume?.();          // nothing covers the game any more
 }
 
-function onLobbyTab(tab) {
+function onLobbyTab(tab, opts) {
   lobby.setNavTab(tab);
   if (tab === 'home') return panels.hide();
   if (tab === 'daily') refreshDaily();
   track('screen_view', { screen_name: tab, screen_class: 'tab' });
-  panels.show(tab, panelContext());
+  panels.show(tab, panelContext(), opts);
+  if (tab === 'shop' && billing?.state === 'ready') track('iap_view', { from: opts?.from || 'tab' });
+}
+
+/**
+ * The + on the coin counter, and "Get coins" when something costs too much:
+ * the Shop's coin section. Resolves when the sheet closes.
+ */
+function openCoins(from = 'pill') {
+  if (anyCardOpen()) return Promise.resolve();
+  if (typeof from !== 'string') from = 'pill';
+  billing?.refresh();
+  const closed = new Promise((resolve) => panelClosed.push(resolve));
+  if (screen === 'lobby') onLobbyTab('shop', { focus: 'coins', from });
+  else {
+    instance.pause?.();                         // resumed when the sheet closes
+    panels.show('shop', panelContext(), { focus: 'coins' });
+    if (billing?.state === 'ready') track('iap_view', { from });
+  }
+  return closed;
+}
+
+const fmtCoins = (n) => Number(n).toLocaleString('en-US');
+
+function onBillingNotice(kind, { coins, pack } = {}) {
+  if (kind === 'granted') {
+    sound.play('celebrate');
+    toast(`${coinIcon(18)} <span>+${fmtCoins(coins)} coins · Thank you!</span>`, 3200);
+  } else if (kind === 'pending') {
+    toast(`<span>Payment pending · coins arrive once confirmed</span>`, 3600);
+  }
+}
+
+/** Whether shortOf() has anything to offer: coin packs, or a rewarded ad for this placement. */
+const shortHelps = (ad) => !!billing?.enabled || !!(ad && ads.rewarded.available(ad));
+
+/**
+ * Something costs more than the player has. One card, coin packs first, then
+ * a rewarded ad (when the caller has a placement for one), then "Not now".
+ * Resolves 'coins' (the player now has enough), 'ad' (watched to the end)
+ * or null. Games reach it as host.shortOf().
+ */
+async function shortOf({ price, what, ad = null, adLabel = 'Watch an ad instead' } = {}) {
+  const canBuy = !!billing?.enabled;
+  const canAd = !!(ad && ads.rewarded.available(ad));
+  if (!canBuy && !canAd) return null;
+  const need = Math.max(1, price - wallet.coins);
+  track('coins_short', { what, need, buy: canBuy, ad: canAd });
+  const pick = await choose({
+    kicker: 'Not enough coins',
+    title: `${fmtCoins(need)} more for ${what}`,
+    line: canBuy && canAd ? 'Coin pack or a short ad' : canBuy ? 'Get a coin pack' : 'Watch a short ad',
+    choices: [
+      canBuy && { id: 'coins', label: `${coinIcon(18)} Get coins`, primary: true },
+      canAd && { id: 'ad', label: `${icons.play(16)} ${adLabel}`, primary: !canBuy },
+    ].filter(Boolean),
+  });
+  if (pick === 'coins') { await openCoins('short'); return wallet.coins >= price ? 'coins' : null; }
+  if (pick === 'ad') return (await ads.rewarded.show(ad)) ? 'ad' : null;
+  return null;
 }
 
 /*
@@ -660,13 +845,14 @@ async function onPause() {
  * With ads on, the note says so and the US opt-out appears; without keys, the
  * app shows no ads and sends nothing, and says that instead.
  */
-const SETTINGS_NOTE_ADS = 'Free to play, with ads. Some are optional and earn rewards; past level 10, '
-  + 'a short ad also plays every few minutes, announced by an Ad break screen. No purchases. '
-  + 'Ads are served by Google AdMob; see the Privacy Policy for what they collect.';
-const SETTINGS_NOTE_NO_ADS = 'No ads and no purchases. Your progress stays on this phone.';
+const SETTINGS_NOTE_ADS = 'Free, with ads. Optional ads give rewards; past level 10, '
+  + 'an Ad break at each level end. {buy} '
+  + 'Ads by Google AdMob (see Privacy Policy).';
+const SETTINGS_NOTE_NO_ADS = 'No ads. {buy} Progress saved on this phone.';
+const SETTINGS_BUY = 'Optional coin packs via Google Play.';
+const SETTINGS_NO_BUY = 'No purchases.';
 // Only said where it is true: the Android app, where Firebase is built in.
-const SETTINGS_NOTE_ANALYTICS = ' Gameplay statistics and crash reports are sent to Google Firebase '
-  + 'to help improve the game.';
+const SETTINGS_NOTE_ANALYTICS = ' Gameplay stats and crash reports go to Google Firebase.';
 
 /**
  * Ad status: for testing on a phone. Says what AdMob last answered, in plain
@@ -685,6 +871,23 @@ function explainAd(state) {
   const code = /error (\d+)/.exec(state)?.[1];
   return `${state}<br><small>${AD_CODES[code] || ''}</small>`;
 }
+/** Coin packs on the testing card: whether Play answered, and which packs it found. */
+function billingLine() {
+  const b = billing?.status();
+  if (!b) return '<b>Purchases</b>: none in this build';
+  if (!b.asked) return `<b>Purchases</b>: ${b.state}`;
+  return `<b>Purchases</b>: ${b.state}, ${b.found}/${b.asked.length} packs found in Play`
+    + (b.error ? `<br><small>${b.error}</small>` : '');
+}
+
+/** Play Games on the testing card. */
+function cloudLine() {
+  const c = cloud?.status();
+  if (!c) return '<b>Play Games</b>: off in this build (no playGamesAppId)';
+  return `<b>Play Games</b>: ${c.signedIn ? `signed in as ${c.player}` : 'not signed in'}`
+    + (c.error ? `<br><small>${c.error}</small>` : '');
+}
+
 async function adStatus() {
   for (;;) {
     const s = ads.status();
@@ -697,7 +900,9 @@ async function adStatus() {
         `<b>SDK started</b>: ${s.started ? 'yes' : 'no'}`,
         `<b>Rewarded</b> ${tail(s.rewardedUnit)}: ${explainAd(s.rewarded)}`,
         `<b>Interstitial</b> ${tail(s.interstitialUnit)}: ${explainAd(s.interstitial)}`,
-        `<b>Ad break</b>: level ${currentLevel} (from ${INTERSTITIAL_FROM_LEVEL}), ${ads.playSeconds} s of play counted (needs ${INTERSTITIAL_EVERY_MS / 1000})`,
+        `<b>Ad break</b>: at each level end from level ${INTERSTITIAL_FROM_LEVEL}; now on ${currentLevel}. Last rewarded ad ${Number.isFinite(ads.sinceRewarded) ? `${ads.sinceRewarded} s ago` : 'never'} (skips within ${AFTER_REWARDED_MS / 1000} s)`,
+        billingLine(),
+        cloudLine(),
       ].join('<br>');
     const again = await confirm({ kicker: 'Testing', title: 'Ad status', line, ok: 'Refresh', cancel: 'Close' });
     if (!again) return;
@@ -709,12 +914,21 @@ async function onSettings() {
   const pick = await settings({
     title: APP.name,
     note: (ads.enabled ? SETTINGS_NOTE_ADS : SETTINGS_NOTE_NO_ADS)
+      .replace('{buy}', billing.enabled ? SETTINGS_BUY : SETTINGS_NO_BUY)
       + (analytics.enabled ? SETTINGS_NOTE_ANALYTICS : ''),
     privacy: ads.enabled && ads.privacyRequired(),
     reminders: notify.available ? remindersOn() : null,
     audio: { sfx: sound.sfx, music: sound.music },
     version: APP_VERSION,
+    share: social.canShare,
+    cloud: cloud.enabled ? { signedIn: cloud.signedIn, player: cloud.player } : null,
   });
+  if (pick === 'share') { social.share('settings'); return onSettings(); }
+  if (pick === 'cloud') {
+    if (!cloud.signedIn) cloud.signIn();
+    else toast(`<span>Progress backed up to ${cloud.player || 'your Google account'}</span>`, 2400);
+    return;
+  }
   if (pick === 'sfx' || pick === 'music') {
     const on = !shell.audio[pick];
     shell.audio[pick] = on;
@@ -737,9 +951,8 @@ async function onSettings() {
   const yes = await confirm({
     kicker: 'Settings',
     title: 'Erase everything?',
-    line: 'Your coins, cats, cosmetics and every game\'s progress all go back to the start. '
-        + 'This cannot be undone.',
-    ok: 'Erase and start over',
+    line: 'Coins, cats and progress. Can\'t be undone.',
+    ok: 'Erase',
   });
   if (!yes) return;
   track('progress_erased', { best_level: shell.stats.bestLevel });
@@ -755,12 +968,20 @@ function activeCosmetic() {
   return shell.cosmetics[game.id]?.active || game.defaultCosmetic || null;
 }
 
-function buy(kind, id) {
+async function buy(kind, id, button) {
+  if (kind === 'pack') {
+    if (button) button.disabled = true;
+    const status = await billing.buy(id);
+    if (status === 'error') toast('<span>Purchase failed. Try again later.</span>', 3200);
+    else if (status === 'owned') toast('<span>Finishing an earlier purchase…</span>', 3000);
+    if (panels.open === 'shop') panels.show('shop', panelContext());
+    return;
+  }
   if (kind === 'cat') {
     const c = catById(id);
     if (!unlockProgress(c, shell.stats).revealed) return;   // hidden cats cannot be bought
     if (!shell.cats.owned.includes(id)) {
-      if (!wallet.spend(c.price, 'cat')) return;             // the price tag already says so
+      if (!wallet.spend(c.price, 'cat')) return shortOf({ price: c.price, what: c.name });   // the price tag says so; packs may help
       shell.cats.owned.push(id);
     }
     shell.cats.worn = id;
@@ -776,7 +997,7 @@ function buy(kind, id) {
     if (!item) return;
     const mine = (shell.cosmetics[game.id] ||= { owned: [], active: game.defaultCosmetic });
     if (item.price > 0 && !mine.owned.includes(id)) {
-      if (!wallet.spend(item.price, 'cosmetic')) return;
+      if (!wallet.spend(item.price, 'cosmetic')) return shortOf({ price: item.price, what: item.name });
       mine.owned.push(id);
     }
     mine.active = id;
@@ -822,6 +1043,9 @@ function wireDev() {
   window.wallet = wallet;
   window.__ads = ads;
   window.__sound = sound;
+  window.__shop = billing;
+  window.__social = social;
+  window.__cloud_api = cloud;
   window.stats = shell.stats;
   window.gameStats = shell.gameStats[game.id] ||= {};
   window.CATS = CATS;
